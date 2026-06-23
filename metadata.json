@@ -1,0 +1,6 @@
+{
+  "name": "TransitMY",
+  "description": "A smart transit assistant helping tourists and expats navigate Malaysia's public transportation system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

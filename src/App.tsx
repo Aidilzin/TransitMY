@@ -1,0 +1,2027 @@
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import ReactMarkdown from "react-markdown";
+import {
+  MessageSquare,
+  Network,
+  Ticket,
+  AlertCircle,
+  TrendingUp,
+  Image as ImageIcon,
+  Send,
+  RefreshCw,
+  Clock,
+  MapPin,
+  X,
+  HelpCircle,
+  Volume2,
+  Info,
+  Sliders,
+  AlertTriangle,
+  ChevronRight,
+  Sun,
+  Moon,
+  Map,
+  CreditCard,
+  CheckCircle2,
+  ArrowRight,
+  Train,
+  Bus,
+  Layers,
+  Compass,
+  Key
+} from "lucide-react";
+import { Language, TabId, Message, Timetable, Announcement } from "./types";
+import {
+  UI_TRANSLATIONS,
+  TRANSIT_LINES,
+  TICKETING_GUIDE,
+  TRANSIT_TIPS,
+  FARE_GUESTIMATION,
+  SUGGESTED_PROMPTS
+} from "./data";
+import JourneyPlanner from "./components/JourneyPlanner";
+
+const LOCAL_INITIAL_TIMETABLES: Timetable[] = [
+  { id: "kj-lrt-gombak", line: "Kelana Jaya LRT", color: "#EF4444", destination: "Gombak", station: "KL Sentral", minutes: 3, status: "On Time" },
+  { id: "kj-lrt-putra", line: "Kelana Jaya LRT", color: "#EF4444", destination: "Putra Heights", station: "KL Sentral", minutes: 5, status: "On Time" },
+  { id: "kj-mrt-kwasa", line: "Kajang MRT", color: "#10B981", destination: "Kwasa Damansara", station: "Bukit Bintang", minutes: 6, status: "On Time" },
+  { id: "kj-mrt-kajang", line: "Kajang MRT", color: "#10B981", destination: "Kajang", station: "Bukit Bintang", minutes: 8, status: "On Time" },
+  { id: "ktm-komuter-batu-caves", line: "KTM Komuter (Batu Caves Line)", color: "#3B82F6", destination: "Batu Caves", station: "KL Sentral", minutes: 14, status: "Minor Delay" },
+  { id: "monorail-titiwangsa", line: "KL Monorail", color: "#F59E0B", destination: "Titiwangsa", station: "Hang Tuah", minutes: 2, status: "On Time" },
+  { id: "putra-mrt-putrajaya", line: "Putrajaya MRT", color: "#EC4899", destination: "Putrajaya Sentral", station: "Ampang Park", minutes: 7, status: "On Time" }
+];
+
+const LOCAL_GENERAL_ANNOUNCEMENTS: Announcement[] = [
+  { id: 1, text: "⚠️ KTM Komuter Batu Caves Line experiencing minor scheduling delays (+5 mins) due to track maintenance near Sentul.", type: "warning" },
+  { id: 2, text: "🎫 Save queueing time: Tourists can purchase the 'MyCity 3-Day Pass' for unlimited rides on LRT, MRT, and Monorail for RM25!", type: "info" }
+];
+
+const SYSTEM_INSTRUCTION = `You are TransitMY, a friendly and knowledgeable Malaysia public transit assistant. You help tourists, expats, and first-time riders navigate Malaysia's complex public transport network confidently.
+
+You have expert knowledge of:
+- All rail lines: LRT (Kelana Jaya & Ampang/Sri Petaling lines), MRT (Putrajaya & Kajang lines), KTM Komuter (Port Klang & Seremban lines), KL Monorail, BRT Sunway, and ERL (KLIA Ekspres & KLIA Transit)
+- Ticketing: Touch 'n Go card, MyRapid card, single-journey tokens, token machines, and where to top up
+- Key interchange stations: KL Sentral, Masjid Jamek, Chan Sow Lin, Hang Tuah, Titiwangsa, Gombak
+- Fares, operating hours (approx. 6am–midnight for most lines), and peak vs off-peak times
+- Common mistakes tourists make (wrong platform, wrong exit, touching out before transferring, not knowing bag rules)
+- Walking connections between stations (e.g. Pasar Seni ↔ Masjid Jamek, Hang Tuah LRT ↔ Monorail)
+
+When answering:
+- Always give step-by-step directions when someone asks how to get somewhere
+- Mention the specific line name AND line color (e.g. "Take the MRT Putrajaya Line — the blue line")
+- Warn about common pain points proactively (e.g. "Make sure you tap out before leaving, or you'll be charged the maximum fare")
+- If the user uploads a photo of a sign, ticket machine, or map, explain what they're looking at
+- Answer in the user's language if they write in Malay, Mandarin, or Tamil
+- Keep answers concise and scannable — use short bullet points for multi-step directions.`;
+
+function detectLanguage(messages: any[]): "en" | "bm" | "zh" | "ta" {
+  let text = "";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user" && messages[i].text) {
+      text = messages[i].text;
+      break;
+    }
+  }
+
+  if (!text) return "en";
+
+  if (/[\u4e00-\u9fa5]/.test(text)) {
+    return "zh";
+  }
+
+  if (/[\u0b80-\u0bff]/.test(text)) {
+    return "ta";
+  }
+
+  const msKeywords = [
+    "selamat", "stesen", "tiket", "harga", "tambang", "laluan", 
+    "bagaimana", "dari", "ke", "saya", "tanya", "panduan", 
+    "bantuan", "kereta", "api", "kembalikan", "ada", "boleh",
+    "monorel", "lrt", "mrt", "jalan", "kad", "sentral", "masjid",
+    "jamek", "puncak", "pasar", "seni", "apa", "di mana"
+  ];
+  const cleanedText = text.toLowerCase();
+  const matchedMs = msKeywords.filter(word => cleanedText.includes(word)).length;
+  if (matchedMs >= 2 || (matchedMs >= 1 && (cleanedText.includes(" lrt") || cleanedText.includes(" mrt") || cleanedText.includes(" lrt ") || cleanedText.includes(" mrt ")))) {
+    return "bm";
+  }
+
+  return "en";
+}
+
+function getSpecificInsights(text: string, lang: "en" | "bm" | "zh" | "ta"): string {
+  const query = text.toLowerCase();
+  
+  if (lang === "zh") {
+    if (query.includes("ticket") || query.includes("token") || query.includes("票") || query.includes("买") || query.includes("支付") || query.includes("card") || query.includes("tng") || query.includes("touch")) {
+      return `\n\n### 💡 您问到了关于【车票/支付】：
+*   若您只单次搭乘，最简便的方法是使用**自动售票机**购买蓝色单程代币。售票机接受 1元、5元纸币和硬币。
+*   极力推荐在站内柜台购买 **Touch 'n Go 实体卡**，既省去了排队买票的麻烦，乘车还能享受优惠！请确保内有最少 RM10。`;
+    }
+    if (query.includes("sentral") || query.includes("hub") || query.includes("中央") || query.includes("枢纽")) {
+      return `\n\n### 💡 您问到了关于【KL Sentral 中央车站】：
+*   KL Sentral 是全马最大的枢纽。LRT（5号线）、MRT 捷运（9号线）和 KTM 火车都在此交汇。
+*   **注意**：吉隆坡单轨 (KL Monorail) 车站名为 "KL Sentral Monorail"，该站与主枢纽大楼不直接相连。您必须过十字路口或通过 Nu Sentral 购物中心步行约 5 分钟换乘。`;
+    }
+    if (query.includes("masjid jamek") || query.includes("jamek") || query.includes("占美")) {
+      return `\n\n### 💡 您问到了关于【Masjid Jamek 站】：
+*   该站是 LRT 格拉那再也线（红/5号线）与 LRT 安邦线/大城堡线（橘/3、4号线）的交汇枢纽。
+*   两条换乘轨道高低错落，站内设有跨线扶梯，换乘仅需步行 1-2 分钟，**无需出站刷卡**。`;
+    }
+    if (query.includes("operating") || query.includes("hour") || query.includes("time") || query.includes("time table") || query.includes("timetable") || query.includes("时间") || query.includes("首班") || query.includes("末班") || query.includes("几点")) {
+      return `\n\n### 💡 您问到了关于【运营时间与时刻表】：
+*   全网轻快铁及捷运首班车于早上 **6:00 AM** 发车。
+*   末班车通常在晚上 **11:30 PM - 12:00 AM** 之间发车。建议在主页顶部的 **实时列车到站倒计时面板** 查看具体车次到站，信息直接对接 RapidKL 实时传输！`;
+    }
+  } else if (lang === "bm") {
+    if (query.includes("ticket") || query.includes("token") || query.includes("harga") || query.includes("tambang") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("beli")) {
+      return `\n\n### 💡 Soalan anda mengenai 【Tiket & Tambang】：
+*   Untuk satu perjalanan, anda boleh beli **Token Laluan Biru** di Mesin Jualan Tiket (TVM). Ia menerima RM1, RM5 dan duit syiling.
+*   Kad **Touch 'n Go** amat dinasihatkan jika anda mahu perjalanan yang lancar tanpa beratur panjang. Pastikan baki kad tidak kurang dari RM10 untuk melepasi kaunter.`;
+    }
+    if (query.includes("sentral") || query.includes("hub") || query.includes("pusat")) {
+      return `\n\n### 💡 Soalan anda mengenai 【KL Sentral】：
+*   KL Sentral ialah hub transit utama rel di Selangor dan Kuala Lumpur.
+*   **Awas**: Stesen KL Monorail KL Sentral terletak di luar bangunan utama. Anda perlu berjalan kaki selama 5 minit merentasi dalam kompleks membeli-belah Nu Sentral untuk membuat pertukaran.`;
+    }
+    if (query.includes("masjid jamek") || query.includes("jamek")) {
+      return `\n\n### 💡 Soalan anda mengenai 【Stesen Masjid Jamek】：
+*   Stesen ini menghubungkan LRT Laluan Kelana Jaya (Laluan 5) dengan LRT Laluan Ampang & Sri Petaling (Laluan 3 & 4).
+*   Pertukaran adalah percuma dan boleh dibuat di dalam bangunan tanpa perlu tap keluar atau tap masuk semula.`;
+    }
+    if (query.includes("operating") || query.includes("hour") || query.includes("time") || query.includes("timetable") || query.includes("pukul") || query.includes("jam") || query.includes("jadual")) {
+      return `\n\n### 💡 Soalan anda mengenai 【Waktu Operasi & Jadual Rel】：
+*   Semua perkhidmatan tren mula beroperasi seawal jam **6:00 Pagi** setiap hari.
+*   Tren terakhir bertolak antara jam **11:30 Malam hingga 12:00 Tengah Malam**. Sila semak tab **Jadual Waktu** (Timetable) di halaman utama kami untuk melihat kemas kini masa nyata RapidKL.`;
+    }
+  } else if (lang === "ta") {
+    if (query.includes("ticket") || query.includes("token") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("pay") || query.includes("கட்டணம்") || query.includes("டிக்கெட்")) {
+      return `\n\n### 💡 【டிக்கெட்டுகள் & கட்டணங்கள்】 பற்றிய தகவல்:
+*   ஒரு முறை பயணிக்க நீல நிற **டோக்கன்** நாணயங்களை நிலையங்களில் வாங்கலாம்.
+*   டச் என் கோ கார்டு வாங்குவதன் மூலம் நெரிசல் இல்லாமல் வேகமாக பயணிக்கலாம்.`;
+    }
+  } else {
+    if (query.includes("ticket") || query.includes("token") || query.includes("fare") || query.includes("price") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("buy")) {
+      return `\n\n### 💡 Your query about 【Ticketing & Fares】：
+*   For single rides, buy a blue **Single-Journey Token** at English-supported Transit Vending Machines (TVMs) using RM1/RM5 notes or coins.
+*   We strongly advocate getting a **Touch 'n Go Card** at service offices. This bypasses high queues and gives discounted rates. Remember: TnG gates require a **minimum balance of RM10.00** to open.`;
+    }
+    if (query.includes("sentral") || query.includes("hub") || query.includes("central")) {
+      return `\n\n### 💡 Your query about 【KL Sentral Hub】：
+*   KL Sentral connects almost all lines (LRT, MRT, KTM, ERL) smoothly inside one layout.
+*   **Pro-Tip**: The KL Monorail station is actually across the street. You must walk for 5 minutes through the *Nu Sentral* mall inside the elevated pedestrian bridge to swap lines.`;
+    }
+    if (query.includes("masjid jamek") || query.includes("jamek")) {
+      return `\n\n### 💡 Your query about 【Masjid Jamek Station Interchanging】：
+*   It is an awesome integration station between LRT Kelana Jaya Line (Red/Line 5) and LRT Ampang/Sri Petaling lines (Orange/Lines 3 and 4).
+*   You **do not need to tap out** of gates to change. Simply walk across the overhead pedestrian bridge / escalators.`;
+    }
+  }
+
+  return "";
+}
+
+function getLocalFallbackText(messages: any[], lang: "en" | "bm" | "zh" | "ta"): string {
+  const lastMessageText = messages[messages.length - 1]?.text || "";
+  const specificInsight = getSpecificInsights(lastMessageText, lang);
+
+  if (lang === "zh") {
+    return `*(提示：由于AI服务当前流量过大，TransitMY 已自动启动高效本地备用导乘模式，为您提供极速、精准的吉隆坡轨道交通指引。)*
+
+这里为您整理的吉隆坡轨道交通核心搭乘建议：
+
+### 🎫 车票选择与乘车支付
+*   **Touch 'n Go (一触即通卡):** 强烈推荐购买。进站时卡内须保持**最低 10.00 马币 (RM10.00)** 的余额。可于大站柜台购买。
+*   **单程硬币型代币 (Single-Journey Token):** 适合单次临时出行，可在轻轨各站内自动售票机上使用现金购买。
+*   **游客无限次通行卡:** 推荐购买 **MyCity 3日无限通票**（RM25），可在有效期内无限次搭乘 LRT, MRT, 和 Monorail。
+
+### 🗺️ 主要轨道交通线路
+*   **LRT 格拉那再也线 (红/5号线):** 格拉那再也至 Gombak 必乘线，途经双子塔（KLCC）、中央艺术坊（Pasar Seni）等。
+*   **MRT 加影线 (绿/9号线):** 途经武吉免登、国家博物馆、默迪卡。
+*   **KL Monorail 单轨电车 (橙/8号线):** 直达武吉免登金三角商业区。
+*   **重要换乘枢纽:**
+    *   **KL Sentral (中央车站):** 最大的换乘枢纽，但换乘**吉隆坡单轨 (Monorail)** 时需要步行约 5分钟穿越 *Nu Sentral* 购物商场。
+    *   **Masjid Jamek (占美清真寺站):** 5号线与3、4号线轻松在此站内进行跨线换乘，无需出站刷卡。${specificInsight || "\n\n如果您需要了解特定车站、换乘路线或购票细节，请随时发消息，我会即刻为您解答！"}`;
+  } else if (lang === "bm") {
+    return `*(Nota: Berikutan permintaan perkhidmatan yang amat tinggi, TransitMY kini beroperasi dalam mod sandaran tempatan. Saya sedia membantu anda dengan panduan perjalanan yang tepat dan pantas!)*
+
+Berikut adalah panduan penting transit rel Kuala Lumpur untuk memudahkan perjalanan anda:
+
+### 🎫 Pembelian Tiket & Kad Tambang
+*   **Kad Touch 'n Go (TnG):** Kaedah bayaran yang sangat disyorkan. Boleh dibeli di kaunter stesen utama. Pastikan **baki minimum ada RM10.00** sebelum masuk ke depoh pintu rel.
+*   **Token Perjalanan Tunggal (Single-Journey Token):** Sesuai untuk perjalanan sekali sahaja. Beli di mesin layan diri (TVM) di mana-mana stesen menggunakan wang kertas (RM1/RM5) atau syiling.
+*   **Pas MyCity:** Bagi pelancong, dapatkan **Pas MyCity 3-Hari** (RM25) atau **Pas 1-Hari** (RM15) untuk akses tanpa had ke rangkaian LRT, MRT, dan Monorel.
+
+### 🗺️ Laluan Jalur Rel & Hub Pertukaran Utama
+*   **LRT Laluan Kelana Jaya (Merah / Laluan 5):** Menghubungkan Gombak ke Putra Heights, melalui KLCC, Pasar Seni, dan KL Sentral.
+*   **MRT Laluan Kajang (Hijau / Laluan 9):** Melalui Muzium Negara, Bukit Bintang, dan Merdeka.
+*   **KL Monorel (Oren / Laluan 8):** Laluan khas melalui pusat segi tiga emas Bukit Bintang.
+*   **Hub Pertukaran:**
+    *   **KL Sentral:** Hub utama. Sila berjalan kaki sekitar 5 minit menerusi pusat beli-belah *Nu Sentral* untuk bertukar ke stesen KL Monorel.
+    *   **Masjid Jamek:** Hub pertukaran LRT Laluan Kelana Jaya & Ampang/Sri Petaling dengan lancar tanpa tap out.${specificInsight || "\n\nAdakah anda memerlukan bantuan mengenai stesen, laluan tertentu, atau kaedah kad? Sila tulis soalan anda segera!"}`;
+  } else if (lang === "ta") {
+    return `*(அறிவிப்பு: AI சேவை தற்போது அதிக சுமையில் உள்ளதால், TransitMY உங்களுக்கு உதவ உள்ளூர் ஆஃப்லைன் பயன்முறையில் இயங்குகிறது. இருப்பினும் விரைவான வழிகாட்டலை நான் வழங்க முடியும்!)*
+
+கோலாலம்பூர் பொதுப் போக்குவரத்து அமைப்பின் முக்கிய விபரங்கள்:
+
+### 🎫 கட்டணம் மற்றும் டிக்கெட்டுகள:
+*   **டச் என் கோ (Touch 'n Go Card):** மிகவும் பரிந்துரைக்கப்படும் கட்டண அட்டை. கார்டில் நுழையும் போது குறைந்தபட்சம் **RM10.00 பேலன்ஸ்** இருக்க வேண்டும்.
+*   **சிங்கிள் டோக்கன் (Smart Token):** அனைத்து நிலையங்களிலும் உள்ள தானியங்கி இயந்திரங்கள் (TVM) மூலம் பணம் செலுத்தி வாங்கலாம்.
+*   **MyCity அன்லிமிடெட் பாஸ்:** சுற்றுலாப் பயணிகளுக்கு **3-நாள் பாஸ்** (RM25) அல்லது **1-நாள் பாஸ்** (RM15) மூலம் LRT, MRT, Monorail ஆகியவற்றில் வரம்பற்ற பயணம் செய்யலாம்.
+
+### 🗺️ முக்கிய ரயில் பாதைகள்:
+*   **LRT கெலானா ஜெயா பாதை (சிவப்பு / பாதை 5):** Gombak முதல் Putra Heights வரை. KLCC மற்றும் Pasar Seni வழியாகச் செல்கிறது.
+*   **MRT காஜாங் பாதை (பச்சை / பாதை 9):** Muzium Negara, Bukit Bintang வழியாகச் செல்கிறது.
+*   **முக்கிய சந்திப்புகள்:**
+    *   **KL Sentral (மைய நிலையம்):** அனைத்து ரயில்களும் சந்திக்கும் இடம். ஆனால் மோனோரயிலுக்கு மாற *Nu Sentral moolam* 5 நிமிடம் நடக்க வேண்டும்.
+    *   **Masjid Jamek:** LRT சிவப்புக் கோடு மற்றும் மஞ்சள் கோடுகளை இணைக்கும் மிக எளிய சந்திப்பு. ${specificInsight || ""}`;
+  } else {
+    return `*(Notice: The TransitMY engine has entered high-performance local fallback mode to safeguard your journey. Rest assured, I can assist you with comprehensive public transit knowledge for Kuala Lumpur!)*
+
+Here is the essential quick-start guideline for navigating KL's public rail system:
+
+### 🎫 Smart Ticketing & Fares
+*   **Touch 'n Go (TnG) Card:** This is the absolute best way to travel. You can acquire a card at major station customer service counters. Keep in mind that gates require a **minimum balance of RM10.00** to enter.
+*   **Single-Journey Token:** For single trips, purchase a blue coin token at the Ticket Vending Machines (TVMs) at any station. They accept RM1/RM5 notes and coins.
+*   **MyCity Unlimited Passes:** If you're a tourist, ask for the **MyCity 3-Day Pass** (RM25) or **1-Day Pass** (RM15) for unlimited travel on all LRT, MRT, and Monorail lines.
+
+### 🗺️ Primary Transit Lines & Key Interchanges
+*   **LRT Kelana Jaya Line (Red / Line 5):** Reaches from Gombak to Putra Heights. Stops at central tourist sites like KLCC (Twin Towers) and Pasar Seni (Central Market).
+*   **MRT Kajang Line (Green / Line 9):** Serves Muzium Negara, Bukit Bintang, and Merdeka.
+*   **KL Monorail (Orange / Line 8):** Travels past Hang Tuah, Bukit Bintang, and Chow Kit.
+*   **Seamless Change Hubs:**
+    *   **KL Sentral Interchange:** KL's premier transport hub. Note that swapping to the **KL Monorail** requires crossing through the *Nu Sentral* shopping mall (a short, well-marked 5-minute walk).
+    *   **Masjid Jamek:** Direct physical walk between the Kelana Jaya Line and Ampang/Sri Petaling Lines. **Do not tap out** of the ticket gates — transfer internally!${specificInsight || "\n\nWould you like guidance regarding a specific route, station, or operation hours? Type your request below and I'll route you safely!"}`;
+  }
+}
+
+export default function App() {
+  const [lang, setLang] = useState<Language>("en");
+  const [activeTab, setActiveTab] = useState<TabId>("arrivals"); // arrivals is the default landing page.
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [selectedMapStation, setSelectedMapStation] = useState<"kl-sentral" | "masjid-jamek">("kl-sentral");
+  const [selectedMapLevel, setSelectedMapLevel] = useState<number>(1); // default level 1
+  const [selectedNetworkLine, setSelectedNetworkLine] = useState<string>("LRT 5"); // default Kelana Jaya line
+  const [selectedStationCode, setSelectedStationCode] = useState<string>("KJ15"); // default KL Sentral
+  const [selectedMapNode, setSelectedMapNode] = useState<string>("lrt-gates"); // default map node
+  const [inputMessage, setInputMessage] = useState("");
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome-1",
+      role: "model",
+      text: "Selamat Datang! Welcome to Malaysia. I am TransitMY, your smart public transit companion. 🇲🇾\n\nI can help you navigate Kuala Lumpur's rail network including the LRT, MRT, Monorail, KTM Komuter, and airport lines. Ask me for directions, ticket advice, or upload a photo of a confusing sign!",
+      timestamp: new Date()
+    }
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem("GEMINI_API_KEY") || "");
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  // Sync theme with HTML class attribute
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [theme]);
+  
+  // Real-time Timetable & Alerts State
+  const [timetables, setTimetables] = useState<Timetable[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [stationFilter, setStationFilter] = useState<string>("All");
+  const [refreshCountdown, setRefreshCountdown] = useState(30);
+  const [secCounters, setSecCounters] = useState<Record<string, number>>({});
+  const [systemAlertMessage, setSystemAlertMessage] = useState<string | null>(null);
+
+  // Image Upload State
+  const [selectedImage, setSelectedImage] = useState<{
+    data: string; // Base64 raw
+    mimeType: string;
+    previewUrl: string;
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Load live timetable & announcements from local state
+  const fetchTimetableData = async () => {
+    try {
+      setTimetables(LOCAL_INITIAL_TIMETABLES);
+      setAnnouncements(LOCAL_GENERAL_ANNOUNCEMENTS);
+      
+      // Initialize custom countdown seconds for each train (e.g. minutes * 60)
+      const initialSeconds: Record<string, number> = {};
+      LOCAL_INITIAL_TIMETABLES.forEach((t: Timetable) => {
+        initialSeconds[t.id] = t.minutes * 60;
+      });
+      setSecCounters(initialSeconds);
+      setRefreshCountdown(30);
+    } catch (e) {
+      console.error("Failed to load local timetables:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchTimetableData();
+  }, []);
+
+  // Update timer counters every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Tick down global refresh timer
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          fetchTimetableData();
+          return 30;
+        }
+        return prev - 1;
+      });
+
+      // Tick down individual train countdown seconds
+      setSecCounters((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((key) => {
+          if (next[key] > 0) {
+            next[key] -= 1;
+          } else {
+            // Auto reset back to a random interval around 7-10 minutes to simulate real arrivals
+            next[key] = (Math.floor(Math.random() * 5) + 6) * 60;
+          }
+        });
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Scroll chat to bottom with smoothly animated frames
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading, isChatOpen]);
+
+  // Handle suggested chip clicking
+  const handleSuggestedPrompt = (promptText: string) => {
+    setInputMessage(promptText);
+    sendMessage(promptText);
+  };
+
+  // Convert minutes & seconds for a cleaner reading format
+  const formatTimeLeft = (secondsTotal: number) => {
+    if (secondsTotal === undefined) return "Calculating...";
+    const m = Math.floor(secondsTotal / 60);
+    const s = secondsTotal % 60;
+    if (m === 0 && s === 0) return "Arriving Now 🚉";
+    return `${m}m ${s < 10 ? "0" : ""}${s}s`;
+  };
+
+  // Simulate an instant delay alert trigger
+  const triggerSimulatedDelay = () => {
+    // Select a random train to delay
+    if (timetables.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * timetables.length);
+    const targetTrain = timetables[randomIndex];
+
+    const updated = [...timetables];
+    updated[randomIndex] = {
+      ...targetTrain,
+      status: "Delayed",
+      minutes: targetTrain.minutes + 8
+    };
+
+    // Update countdown seconds
+    setSecCounters((prev) => ({
+      ...prev,
+      [targetTrain.id]: (targetTrain.minutes + 8) * 60
+    }));
+
+    setTimetables(updated);
+
+    const alertText = `⚠️ SIGNAL FAILURE SIMULATED: ${targetTrain.line} heading to ${targetTrain.destination} is now experiencing severe delay of +8 minutes due to simulated rail obstruction.`;
+    setSystemAlertMessage(alertText);
+
+    // Auto-dismiss simulated alert banner after 12 seconds
+    setTimeout(() => {
+      setSystemAlertMessage(null);
+    }, 12000);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      // Extract pure base64 code by stripping the prefix "data:...;base64,"
+      const commaIndex = base64String.indexOf(",");
+      const pureBase64 = commaIndex !== -1 ? base64String.substring(commaIndex + 1) : base64String;
+
+      setSelectedImage({
+        data: pureBase64,
+        mimeType: file.type,
+        previewUrl: base64String // used for frontend image element src
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const triggerImageSelector = () => {
+    fileInputRef.current?.click();
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Chat message submission API handler
+  const sendMessage = async (overrideText?: string) => {
+    const textToSend = overrideText !== undefined ? overrideText : inputMessage;
+    if (!textToSend.trim() && !selectedImage) return;
+
+    const userMessageId = `user-${Date.now()}`;
+    const userMsg: Message = {
+      id: userMessageId,
+      role: "user",
+      text: textToSend,
+      timestamp: new Date()
+    };
+
+    if (selectedImage) {
+      userMsg.image = {
+        data: selectedImage.data,
+        mimeType: selectedImage.mimeType
+      };
+    }
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInputMessage("");
+    setLoading(true);
+
+    const imageToSend = selectedImage ? { ...selectedImage } : null;
+    removeSelectedImage();
+
+    try {
+      // Gather relevant client message histories for stateless full-context thread handling
+      const messageThread = messages.map((m) => ({
+        role: m.role,
+        text: m.text,
+        image: m.image
+      }));
+
+      // Append current message
+      messageThread.push({
+        role: "user",
+        text: textToSend,
+        image: imageToSend ? { data: imageToSend.data, mimeType: imageToSend.mimeType } : undefined
+      });
+
+      const lang = detectLanguage(messageThread);
+
+      if (!apiKey) {
+        // Fallback to local static assistance mode
+        const replyText = getLocalFallbackText(messageThread, lang);
+        
+        // Wait a short time to simulate response time
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "model",
+            text: replyText,
+            timestamp: new Date()
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const contents = messageThread.map((m) => {
+        if (m.image) {
+          const parts: any[] = [
+            {
+              inlineData: {
+                data: m.image.data,
+                mimeType: m.image.mimeType || "image/png"
+              }
+            }
+          ];
+          if (m.text) {
+            parts.push({ text: m.text });
+          }
+          return {
+            role: m.role === "model" ? "model" : "user",
+            parts: parts
+          };
+        } else {
+          return {
+            role: m.role === "model" ? "model" : "user",
+            parts: [{ text: m.text || "" }]
+          };
+        }
+      });
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: contents,
+            systemInstruction: {
+              parts: [{ text: SYSTEM_INSTRUCTION }]
+            },
+            generationConfig: {
+              temperature: 0.7,
+            }
+          })
+        }
+      );
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || "Gemini API request failed.");
+      }
+
+      const data = await res.json();
+      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I am sorry, I could not generate a response.";
+      
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "model",
+          text: replyText,
+          timestamp: new Date()
+        }
+      ]);
+    } catch (err: any) {
+      console.error(err);
+      // Gather relevant client message histories for fallback processing
+      const messageThread = messages.map((m) => ({
+        role: m.role,
+        text: m.text,
+        image: m.image
+      }));
+      messageThread.push({
+        role: "user",
+        text: textToSend,
+        image: imageToSend ? { data: imageToSend.data, mimeType: imageToSend.mimeType } : undefined
+      });
+      const lang = detectLanguage(messageThread);
+      const replyText = getLocalFallbackText(messageThread, lang);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          role: "model",
+          text: `*(Note: Direct Gemini API connection failed [${err.message}]. TransitMY local fallback mode has activated to guide you)*\n\n${replyText}`,
+          timestamp: new Date(),
+          isError: true
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // Stations available for filtering based on our timetable database
+  const stationsToFilter = ["All", "KL Sentral", "Bukit Bintang", "Hang Tuah", "Ampang Park"];
+
+  const filteredTimetables = timetables.filter((t) => {
+    if (stationFilter === "All") return true;
+    return t.station.toLowerCase() === stationFilter.toLowerCase();
+  });
+
+  const t = UI_TRANSLATIONS[lang];
+
+  return (
+    <div id="transitmy-app" className="flex flex-col min-h-screen bg-slate-50 font-sans dark:bg-zinc-900 dark:text-zinc-100 transition-colors duration-300 pb-[68px] md:pb-0">
+      
+      {/* 1. TOP HEADER WITH ACCENT STRIPES & LANG SWITCHER */}
+      <header className="sticky top-0 z-50 h-16 bg-white dark:bg-zinc-800 border-b border-slate-200 dark:border-zinc-700 flex items-center justify-between px-4 sm:px-8 shrink-0 shadow-sm">
+        <div className="flex items-center gap-3">
+          {/* Authentic vertical Malaysia flag accent bars */}
+          <div className="flex gap-1 shrink-0">
+            <div className="w-2 sm:w-3 h-5 sm:h-6 bg-malaysia-blue rounded-sm"></div>
+            <div className="w-2 sm:w-3 h-5 sm:h-6 bg-malaysia-red rounded-sm"></div>
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-1.5 font-display">
+              Transit<span className="text-malaysia-blue dark:text-blue-400">MY</span>
+              <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400 text-[10px] rounded font-semibold uppercase tracking-wider">
+                BETA
+              </span>
+            </h1>
+            <p className="hidden md:block text-xs text-slate-400 dark:text-zinc-400">
+              {t.tagline}
+            </p>
+          </div>
+        </div>
+
+        {/* Right side Language Switcher bar */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex bg-slate-100 dark:bg-zinc-700 p-0.5 sm:p-1 rounded-lg text-xs font-semibold">
+            {(["en", "bm", "zh", "ta"] as Language[]).map((ln) => (
+              <button
+                key={ln}
+                onClick={() => setLang(ln)}
+                className={`px-2 sm:px-3 py-1 rounded-md transition-all ${
+                  lang === ln
+                    ? "bg-white dark:bg-zinc-600 shadow-sm text-malaysia-blue dark:text-blue-400 font-bold"
+                    : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                {ln.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {/* Theme Switcher Button */}
+          <button
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            className="w-9 h-9 rounded-full bg-slate-100 dark:bg-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-600 flex items-center justify-center text-slate-500 dark:text-zinc-300 transition-colors"
+            title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+          >
+            {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+
+          {/* API Settings Button */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-9 h-9 rounded-full bg-slate-100 dark:bg-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-600 flex items-center justify-center text-slate-500 dark:text-zinc-300 transition-colors"
+            title="Gemini API Key Settings"
+          >
+            <Key size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* SYSTEM DYNAMIC SIMULATED ALERT WRAPPER */}
+      {systemAlertMessage && (
+        <div className="bg-amber-500 text-white py-2.5 px-4 sm:px-8 text-xs sm:text-sm font-semibold flex items-center justify-between shadow-md transition-all animate-bounce">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} className="shrink-0" />
+            <p>{systemAlertMessage}</p>
+          </div>
+          <button onClick={() => setSystemAlertMessage(null)} className="hover:opacity-80 p-1 shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* MAIN APPLICATION STAGE (BENTO ROW LAYOUT FOR MULTI-COLUMN DESIGN) */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 w-full max-w-7xl mx-auto p-3 sm:p-4 gap-4 overflow-hidden relative">
+        
+        {/* ==========================================
+            CENTER CHAT LAYOUT PANEL (PRIMARY INTERACTION)
+            ========================================== */}
+        <div className="flex-1 flex flex-col bg-white dark:bg-zinc-800 rounded-2xl md:rounded-3xl border border-slate-200 dark:border-zinc-700 shadow-lg md:shadow-xl relative overflow-hidden h-full">
+          
+          {/* Mobile Timetable Arrival banner (sticky overlay for quick mobile glance) */}
+          {activeTab !== "arrivals" && (
+            <div className="md:hidden bg-slate-50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 p-2 text-xs flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap shrink-0">
+              <span className="font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                <Clock size={12} className="text-malaysia-blue dark:text-blue-400 shrink-0" />
+                Live arrivals:
+              </span>
+              <div className="flex gap-2 text-[10px]">
+                {timetables.slice(0, 3).map((item) => {
+                  const secs = secCounters[item.id] !== undefined ? secCounters[item.id] : item.minutes * 60;
+                  return (
+                    <span key={item.id} className="bg-white dark:bg-zinc-800 px-2 py-0.5 rounded border border-slate-200 dark:border-zinc-700">
+                      <strong style={{ color: item.color }}>{item.destination}</strong> • {formatTimeLeft(secs)}
+                    </span>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  setIsChatOpen(!isChatOpen);
+                }}
+                className="text-[10px] font-bold text-malaysia-blue dark:text-blue-400 underline cursor-pointer shrink-0"
+              >
+                Ask AI
+              </button>
+            </div>
+          )}
+
+          {/* Top Panel Tab Bar (Docked Tab bar inside center column) */}
+          <div className="hidden md:flex bg-slate-100 dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 p-2 overflow-x-auto shrink-0 gap-1.5 scrollbar-thin select-none">
+            {[
+              { id: "arrivals", label: "Live Arrivals", icon: <Clock size={14} /> },
+              { id: "planner", label: lang === "en" ? "Route Planner" : lang === "bm" ? "Perancang" : lang === "zh" ? "线路与票价" : lang === "ta" ? "பாதை" : "Route Planner", icon: <Compass size={14} /> },
+              { id: "network", label: lang === "en" ? "Live Routes" : lang === "bm" ? "Stesen" : lang === "zh" ? "站点顺序" : lang === "ta" ? "நிலையங்கள்" : "Live Routes", icon: <Network size={14} /> },
+              { id: "ticketing", label: lang === "en" ? "Pass & Card" : lang === "bm" ? "Tiket & Pas" : lang === "zh" ? "购票指南" : lang === "ta" ? "டிக்கெட்டுகள்" : "Pass & Card", icon: <Ticket size={14} /> },
+              { id: "maps", label: lang === "en" ? "Station Maps" : lang === "bm" ? "Peta Hub" : lang === "zh" ? "枢纽层级" : lang === "ta" ? "வரைபடங்கள்" : "Station Maps", icon: <Map size={14} /> },
+              { id: "fares", label: lang === "en" ? "Fares Matrix" : lang === "bm" ? "Kadar Tambang" : lang === "zh" ? "兼容矩阵" : lang === "ta" ? "கட்டணங்கள்" : "Fares Matrix", icon: <TrendingUp size={14} /> },
+              { id: "tips", label: lang === "en" ? "Commuter Tips" : lang === "bm" ? "Syor Pintar" : lang === "zh" ? "避坑指南" : lang === "ta" ? "ஆலோசனைகள்" : "Commuter Tips", icon: <AlertCircle size={14} /> }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabId)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
+                  activeTab === tab.id
+                    ? "bg-white dark:bg-zinc-800 shadow-sm text-malaysia-blue dark:text-blue-400 border-slate-200 dark:border-zinc-700 font-extrabold"
+                    : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 border-transparent bg-transparent"
+                }`}
+              >
+                <div className={`${activeTab === tab.id ? "text-malaysia-blue dark:text-sky-400 scale-110" : "text-slate-400"} shrink-0`}>
+                  {tab.icon}
+                </div>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Unified Interactive visual panels switcher: Show visual representations on BOTH mobile and desktop when they choose any reference tab */}
+          <div className="flex-1 flex flex-col p-4 sm:p-6 overflow-y-auto bg-slate-50 dark:bg-zinc-900 transition-all duration-300">
+            
+            {/* Responsive Header detailing current active reference tab summary */}
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-zinc-800 shrink-0">
+                <div className="flex items-center gap-2">
+                  {activeTab === "arrivals" && <Clock className="text-malaysia-blue dark:text-blue-400 animate-pulse" size={20} />}
+                  {activeTab === "planner" && <Compass className="text-malaysia-blue dark:text-blue-400 animate-spin-slow" size={20} />}
+                  {activeTab === "network" && <Network className="text-malaysia-blue dark:text-blue-400" size={20} />}
+                  {activeTab === "ticketing" && <Ticket className="text-malaysia-blue dark:text-blue-400" size={20} />}
+                  {activeTab === "tips" && <Sliders className="text-malaysia-blue dark:text-blue-400" size={20} />}
+                  {activeTab === "fares" && <TrendingUp className="text-malaysia-blue dark:text-blue-400" size={20} />}
+                  {activeTab === "maps" && <Map className="text-malaysia-blue dark:text-blue-400" size={20} />}
+                  
+                  <h3 className="font-bold text-slate-800 dark:text-white capitalize text-base sm:text-lg font-display">
+                    {activeTab === "arrivals" ? (lang === "en" ? "Live Arrivals & Status" : lang === "bm" ? "Ketibaan Langsung & Status" : lang === "zh" ? "实时到达及状态" : "நேரடி வருகைகள் & நிலை") :
+                     activeTab === "planner" ? (lang === "en" ? "Route & Fare Estimator" : lang === "bm" ? "Anggaran Tambang & Laluan" : lang === "zh" ? "线路与票价智能规划" : "பாதை கணிப்பான்") :
+                     activeTab === "network" ? t.networkTitle : 
+                     activeTab === "ticketing" ? t.ticketingTitle :
+                     activeTab === "tips" ? t.tipsTitle :
+                     activeTab === "fares" ? t.faresTitle :
+                     t.mapsTitle}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsChatOpen(true)}
+                  className="px-3.5 py-1.5 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-slate-600 dark:text-zinc-200 shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <MessageSquare size={13} />
+                  Ask AI
+                </button>
+              </div>
+
+              {/* ==================== 0A. LIVE ARRIVALS & STATUS (New Central Focal Point) ==================== */}
+              {activeTab === "arrivals" && (
+                <div className="flex flex-col md:flex-row gap-4 h-full min-h-0">
+                  <div className="flex-1 bg-white dark:bg-zinc-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-zinc-700 shadow-sm flex flex-col shrink-0 min-h-0">
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-2">
+                        <Clock className="text-malaysia-blue dark:text-blue-400" size={20} />
+                        <h2 className="font-bold text-slate-800 dark:text-white text-lg">
+                          Live Station Arrivals
+                        </h2>
+                      </div>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title="System telemetry stream online"></span>
+                    </div>
+
+                    {/* Filter selection dropdown */}
+                    <div className="mb-4 flex items-center justify-between text-sm">
+                      <span className="text-slate-500 dark:text-zinc-400 font-medium">{t.currentStation}</span>
+                      <select
+                        value={stationFilter}
+                        onChange={(e) => setStationFilter(e.target.value)}
+                        className="bg-slate-100 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-lg px-3 py-1.5 border-none font-medium focus:ring-2 focus:ring-malaysia-blue pointer-events-auto"
+                      >
+                        {stationsToFilter.map((st) => (
+                          <option key={st} value={st}>
+                            {st === "All" ? t.allStations : st}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2 min-h-[300px] scrollbar-thin">
+                      {filteredTimetables.length === 0 ? (
+                        <div className="text-center py-10 text-sm text-slate-400">
+                          No train service timetables matching this hub.
+                        </div>
+                      ) : (
+                        filteredTimetables.map((item) => {
+                          const secondsLeft = secCounters[item.id] !== undefined ? secCounters[item.id] : item.minutes * 60;
+                          const isDelay = item.status === "Delayed" || item.status === "Minor Delay";
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 transition hover:bg-slate-100 dark:hover:bg-zinc-800/80"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {/* Direct Line Badge Indicators */}
+                                <div
+                                  className="w-2 h-10 rounded-full shrink-0"
+                                  style={{ backgroundColor: item.color }}
+                                ></div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white truncate">
+                                    {item.destination}
+                                  </p>
+                                  <p className="text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+                                    {item.station} • {item.line}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span
+                                  className={`text-sm sm:text-lg font-mono font-bold block ${
+                                    isDelay ? "text-amber-500" : "text-emerald-500"
+                                  }`}
+                                >
+                                  {formatTimeLeft(secondsLeft)}
+                                </span>
+                                <span className="text-[10px] sm:text-xs mt-0.5 px-1.5 py-0.5 inline-block bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 rounded font-medium">
+                                  {item.status}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Simulated Live telemetry controls */}
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-700 flex items-center justify-between gap-1 shrink-0">
+                      <span className="text-xs text-slate-400 dark:text-zinc-400 font-medium">
+                        Auto sync: {refreshCountdown}s
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={triggerSimulatedDelay}
+                          className="px-3 py-1.5 text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-100 transition-colors"
+                          title="Inject randomly generated delay"
+                        >
+                          Delay Simulator
+                        </button>
+                        <button
+                          onClick={fetchTimetableData}
+                          className="p-2 rounded-lg bg-slate-100 dark:bg-zinc-700 hover:bg-slate-200 text-slate-600 dark:text-zinc-300 transition-colors"
+                          title={t.refreshBtn}
+                        >
+                          <RefreshCw size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-3 italic leading-tight text-center">
+                      {t.disclaimer}
+                    </p>
+                  </div>
+
+                  {/* Right side area for Operator status */}
+                  <div className="w-full md:w-[320px] bg-white dark:bg-zinc-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-zinc-700 shadow-sm flex flex-col shrink-0 h-fit lg:h-full">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-slate-800 dark:text-white text-sm uppercase tracking-wider flex items-center gap-1.5">
+                          <Sliders size={16} className="text-malaysia-blue dark:text-blue-400" />
+                          Operator Status
+                        </h3>
+                        <span className="text-[10px] bg-sky-50 dark:bg-zinc-900 border border-sky-100 dark:border-zinc-800/60 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">
+                          AUTO-SYNCED
+                        </span>
+                      </div>
+                      <div className="space-y-3">
+                        {[
+                          { line: "LRT Kelana Jaya", interval: "3 mins", status: "Optimal", color: "#EF4444" },
+                          { line: "MRT Kajang", interval: "4 mins", status: "Optimal", color: "#10B981" },
+                          { line: "MRT Putrajaya", interval: "6 mins", status: "Optimal", color: "#EC4899" },
+                          { line: "KL Monorail", interval: "7 mins", status: "Dense Crowd", color: "#84CC16" },
+                          { line: "KTM Komuter", interval: "30 mins", status: "Joint-Track Ops", color: "#3B82F6" },
+                          { line: "ERL Airport Link", interval: "20 mins", status: "On Schedule", color: "#A855F7" }
+                        ].map((op, oIdx) => (
+                          <div key={oIdx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-100 dark:border-zinc-800 transition hover:bg-slate-100 dark:hover:bg-zinc-800/80">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: op.color }}></div>
+                              <span className="text-xs font-bold text-slate-700 dark:text-zinc-200 truncate">{op.line}</span>
+                            </div>
+                            <div className="text-right flex items-center gap-2 shrink-0">
+                              <span className="text-[10px] text-slate-400 dark:text-zinc-400 font-mono italic">{op.interval}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold text-white shadow-sm ${
+                                op.status === "Optimal" || op.status === "On Schedule" 
+                                  ? "bg-emerald-500/90" 
+                                  : op.status === "Dense Crowd" 
+                                  ? "bg-amber-500/90" 
+                                  : "bg-blue-500/90"
+                              }`}>{op.status}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mt-5 space-y-3 shrink-0 flex-1 md:flex-none md:mt-auto">
+                      <div className="p-3 bg-[#CC0001]/10 border border-[#CC0001]/20 dark:bg-rose-950/40 dark:border-rose-900/40 rounded-xl leading-relaxed">
+                        <p className="text-xs text-[#CC0001] dark:text-rose-400 font-bold flex items-center gap-1.5 mb-1.5 uppercase tracking-wide">
+                          <Volume2 size={14} className="animate-bounce" /> Peak Hour Warning
+                        </p>
+                        <p className="text-[11px] text-[#CC0001]/80 dark:text-rose-400/80">
+                          Major interchanges are highly congested <strong>7:30-9am</strong> and <strong>5pm-7pm</strong>. Plan accordingly!
+                        </p>
+                      </div>
+
+                      <div className="p-3 bg-amber-50/70 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/40 rounded-xl leading-relaxed">
+                        <p className="text-xs text-amber-800 dark:text-amber-300 font-bold flex items-center gap-1.5 mb-1.5">
+                          <Info size={14} /> Tourist Advisory
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                          Always ensure your Touch 'n Go card has a minimum balance of <strong>RM2.00</strong> before entering any RapidKL terminal gates to avoid barrier locking.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ==================== 0. INTERACTIVE JOURNEY PLANNER & FARES ESTIMATOR (Tier 1 Priority!) ==================== */}
+              {activeTab === "planner" && (
+                <JourneyPlanner lang={lang} />
+              )}
+
+              {/* ==================== 1. VISUAL ROUTE STATION ORDER MODULE ==================== */}
+              {activeTab === "network" && (
+                <div className="space-y-5">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed">
+                    {lang === "en" ? "Select a transit line below to view the official station order, interchanges, and specific route insights." :
+                     lang === "bm" ? "Pilih aliran pengangkutan di bawah untuk melihat susunan rasmi stesen, stesen pertukaran, dan maklumat lanjut." :
+                     lang === "zh" ? "在下方选择轨道线路，即可直观查看车站顺序、转乘站及乘车指南。" :
+                     "கீழே உள்ள ரயில் சேவையைத் தேர்ந்தெடுத்து நிலையங்களின் வரிசைமுறையைக் காணுங்கள்."}
+                  </p>
+
+                  {/* 1A. Line selector horizontal scroll cards */}
+                  <div className="flex gap-2.5 overflow-x-auto pb-2 select-none shrink-0 scrollbar-thin">
+                    {[
+                      { code: "LRT 5", name: "Kelana Jaya", color: "#EF4444", short: "LRT 5" },
+                      { code: "MRT 9", name: "Kajang", color: "#10B981", short: "MRT 9" },
+                      { code: "MRT 12", name: "Putrajaya", color: "#EC4899", short: "MRT 12" },
+                      { code: "Monorail 8", name: "KL Monorail", color: "#84CC16", short: "MRL 8" },
+                      { code: "KTM 1", name: "Seremban Line", color: "#3B82F6", short: "KTM 1" },
+                      { code: "ERL 7", name: "KLIA Express", color: "#A855F7", short: "ERL 7" }
+                    ].map((lineItem) => (
+                      <button
+                        key={lineItem.code}
+                        onClick={() => {
+                          setSelectedNetworkLine(lineItem.code);
+                          // Auto set local selected station to first node of line
+                          if (lineItem.code === "LRT 5") setSelectedStationCode("KJ15");
+                          else if (lineItem.code === "MRT 9") setSelectedStationCode("KG18A");
+                          else if (lineItem.code === "MRT 12") setSelectedStationCode("PY20");
+                          else if (lineItem.code === "Monorail 8") setSelectedStationCode("MR6");
+                          else if (lineItem.code === "KTM 1") setSelectedStationCode("KC05");
+                          else if (lineItem.code === "ERL 7") setSelectedStationCode("KE1");
+                        }}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+                          selectedNetworkLine === lineItem.code
+                            ? "bg-white dark:bg-zinc-800 shadow-md border-slate-300 dark:border-zinc-700"
+                            : "bg-slate-100/70 dark:bg-zinc-800 hover:bg-white dark:hover:bg-zinc-800 border-transparent text-slate-500 dark:text-zinc-400"
+                        }`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: lineItem.color }}></div>
+                        <div className="text-left font-mono">
+                          <span className="block text-[10px] opacity-75">{lineItem.short}</span>
+                          <span className="block text-slate-800 dark:text-white leading-normal -mt-0.5">{lineItem.name}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 1B. Two Column visual display: Vertical pipeline on left, Station Info popup on right */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+                    
+                    {/* Column 1: Vertical line track */}
+                    <div className="md:col-span-7 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm max-h-[480px] overflow-y-auto">
+                      <div className="relative pl-10 space-y-7 py-3">
+                        {/* Dynamic pipeline border */}
+                        <div
+                          className="absolute left-4 top-4 bottom-4 w-1.5 rounded"
+                          style={{
+                            backgroundColor: 
+                              selectedNetworkLine === "LRT 5" ? "#EF4444" :
+                              selectedNetworkLine === "MRT 9" ? "#10B981" :
+                              selectedNetworkLine === "MRT 12" ? "#EC4899" :
+                              selectedNetworkLine === "Monorail 8" ? "#84CC16" :
+                              selectedNetworkLine === "KTM 1" ? "#3B82F6" : "#A855F7"
+                          }}
+                        ></div>
+
+                        {(selectedNetworkLine === "LRT 5" ? [
+                          { code: "KJ1", name: "Gombak Terminus", isInterchange: false, transfers: [] },
+                          { code: "KJ3", name: "Wangsa Maju", isInterchange: false, transfers: [] },
+                          { code: "KJ12", name: "KLCC (Twin Towers)", isInterchange: false, transfers: [] },
+                          { code: "KJ13", name: "Masjid Jamek Interchange", isInterchange: true, transfers: ["AG3", "SP3"], tip: "Upper levels connect to Ampang / Sri Petaling train lines." },
+                          { code: "KJ14", name: "Pasar Seni", isInterchange: true, transfers: ["KG16"], tip: "Chinatown hub. Short pedestrian bridge over to KTM Kuala Lumpur station." },
+                          { code: "KJ15", name: "KL Sentral Hub", isInterchange: true, transfers: ["MR1", "KA1", "KE1", "KG15"], tip: "Transit core. Connected directly inside to Nu Sentral." },
+                          { code: "KJ37", name: "Putra Heights Terminus", isInterchange: true, transfers: ["SP31"] }
+                        ] : selectedNetworkLine === "MRT 9" ? [
+                          { code: "KG04", name: "Kwasa Damansara", isInterchange: true, transfers: ["PY01"] },
+                          { code: "KG15", name: "Muzium Negara", isInterchange: true, transfers: ["KJ15"], tip: "Linked via an air-con 250m underground walkway tunnel to KL Sentral." },
+                          { code: "KG16", name: "Pasar Seni", isInterchange: true, transfers: ["KJ14"] },
+                          { code: "KG18A", name: "Bukit Bintang", isInterchange: true, transfers: ["MR6"], tip: "Exit A goes directly to Lot 10. Exit E goes straight into Pavilion shopping mall." },
+                          { code: "KG20", name: "Tun Razak Exchange TRX", isInterchange: true, transfers: ["PY23"] },
+                          { code: "KG35", name: "Kajang Terminus", isInterchange: true, transfers: ["KB06"] }
+                        ] : selectedNetworkLine === "MRT 12" ? [
+                          { code: "PY01", name: "Kwasa Damansara", isInterchange: true, transfers: ["KG04"] },
+                          { code: "PY20", name: "Ampang Park", isInterchange: true, transfers: ["KJ9"], tip: "Underground crossing subway. Follow signs to swap to LRT." },
+                          { code: "PY23", name: "Tun Razak Exchange TRX", isInterchange: true, transfers: ["KG20"] },
+                          { code: "PY41", name: "Putrajaya Sentral Terminus", isInterchange: true, transfers: ["KE3"] }
+                        ] : selectedNetworkLine === "Monorail 8" ? [
+                          { code: "MR1", name: "KL Sentral Monorail", isInterchange: true, transfers: ["KJ15"], tip: "Requires walking through Nu Sentral level 1 & 2 corridors." },
+                          { code: "MR4", name: "Hang Tuah Interchange", isInterchange: true, transfers: ["SP9", "AG9"], tip: "Interchange connects to LalaPort BBCC." },
+                          { code: "MR6", name: "Bukit Bintang", isInterchange: true, transfers: ["KG18A"] },
+                          { code: "MR11", name: "Titiwangsa Terminus", isInterchange: true, transfers: ["SP1", "PY17"] }
+                        ] : selectedNetworkLine === "KTM 1" ? [
+                          { code: "KC05", name: "Batu Caves Terminus", isInterchange: false, transfers: [] },
+                          { code: "KA02", name: "Kuala Lumpur (Old Station)", isInterchange: true, transfers: ["KJ14"] },
+                          { code: "KA01", name: "KL Sentral KTM", isInterchange: true, transfers: ["KJ15"] },
+                          { code: "KB01", name: "Mid Valley", isInterchange: false, transfers: [], tip: "Pedestrian overpass directly links to Mid Valley Megamall entry gates." }
+                        ] : [
+                          { code: "KE1", name: "KL Sentral AirPort Hub", isInterchange: true, transfers: ["KJ15"] },
+                          { code: "KE2", name: "Bandar Tasik Selatan (TBS)", isInterchange: true, transfers: ["SP15", "KB04"], tip: "Interchanges with the primary south-bound cross-state bus terminal." },
+                          { code: "KE4", name: "KLIA Terminal 1 Airport", isInterchange: false, transfers: [] },
+                          { code: "KE5", name: "KLIA Terminal 2 Airport", isInterchange: false, transfers: [] }
+                        ]).map((st) => (
+                          <button
+                            key={st.code}
+                            onClick={() => setSelectedStationCode(st.code)}
+                            className={`w-full text-left relative flex items-center justify-between p-2.5 rounded-xl transition-all cursor-pointer ${
+                              selectedStationCode === st.code
+                                ? "bg-slate-100/80 dark:bg-zinc-800 shadow-sm border border-slate-200 dark:border-zinc-700/80"
+                                : "hover:bg-slate-50 dark:hover:bg-zinc-800/40 border border-transparent"
+                            }`}
+                          >
+                            {/* Track dot node indicator */}
+                            <div
+                              className={`absolute -left-[31px] w-5 h-5 rounded-full border-4 border-white dark:border-zinc-800 flex items-center justify-center transition-all ${
+                                selectedStationCode === st.code
+                                  ? "bg-[#EAB308] scale-125 shadow-md"
+                                  : "bg-slate-400 dark:bg-zinc-500"
+                              }`}
+                            >
+                              {selectedStationCode === st.code && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono text-[10.5px] font-bold px-1.5 py-0.5 rounded tracking-wide text-white" style={{
+                                backgroundColor: 
+                                  selectedNetworkLine === "LRT 5" ? "#EF4444" :
+                                  selectedNetworkLine === "MRT 9" ? "#10B981" :
+                                  selectedNetworkLine === "MRT 12" ? "#EC4899" :
+                                  selectedNetworkLine === "Monorail 8" ? "#84CC16" :
+                                  selectedNetworkLine === "KTM 1" ? "#3B82F6" : "#A855F7"
+                              }}>
+                                {st.code}
+                              </span>
+                              <div className="text-left">
+                                <h5 className="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1">
+                                  {st.name}
+                                </h5>
+                              </div>
+                            </div>
+
+                            {/* Interchanges labels */}
+                            {st.isInterchange && (
+                              <div className="flex gap-1 shrink-0">
+                                {st.transfers.slice(0, 3).map((tr) => (
+                                  <span key={tr} className="text-[8.5px] font-mono font-bold bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-300 px-1 py-0.5 rounded border border-slate-200 dark:border-zinc-700">
+                                    {tr}
+                                  </span>
+                                ))}
+                                {st.transfers.length > 3 && (
+                                  <span className="text-[8.5px] font-bold text-slate-400 font-mono">+{st.transfers.length - 3}</span>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Column 2: Interactive detail display */}
+                    <div className="md:col-span-5 flex flex-col justify-between bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+                      <div>
+                        <div className="flex items-center gap-2 mb-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 p-2.5 rounded-xl">
+                          <CheckCircle2 size={16} className="text-amber-500 shrink-0" />
+                          <h4 className="font-extrabold text-amber-800 dark:text-amber-300 text-xs uppercase tracking-wider">
+                            Interactive Station Detail
+                          </h4>
+                        </div>
+                        
+                        {/* Selected info block */}
+                        {(() => {
+                          // Find st details
+                          const allStList = [
+                            { code: "KJ1", name: "Gombak Terminus", lines: "LRT Kelana Jaya", extra: "Gombak is positioned at the northern border of KL. Ideal for commuters driving from Pahang/Genting Highlands. Includes multi-story park & ride bays.", eat: "Local Malay food stalls inside the station concourse.", travel: "Terminal feeding coach buses straight up to Awana Skyway Genting Highlands." },
+                            { code: "KJ3", name: "Wangsa Maju", lines: "LRT Kelana Jaya", extra: "Busy student transit point. Feeder buses serve Tunku Abdul Rahman UMT campus.", eat: "Famous Wangsa Maju street burger stalls & local bubble tea stores surrounding exit points.", travel: "Take Bus T250 straight to Setapak Central shopping block." },
+                            { code: "KJ12", name: "KLCC (Twin Towers)", lines: "LRT Kelana Jaya", extra: "Directly connected underneath to Suria KLCC mall. Perfect for scenic sightseeing.", eat: "KLCC Signature Food Court on Level 2 & Premium Dinners at the mall.", travel: "Walk through the indoor air-conditioned elevated skywalk bridge (15 mins) straight to Bukit Bintang." },
+                            { code: "KJ13", name: "Masjid Jamek Interchange", lines: "LRT Kelana Jaya", extra: "Crosses Ampang & Sri Petaling LRT systems. Heavy historic precinct. Standard transfer requires zero ticket taps.", eat: "Classic Indian Muslim Murtabak & heritage street food stalls around Masjid India Bazaar.", travel: "Steps away from Merdeka Square (historic clocktower) & the confluence of Klang/Gombak rivers." },
+                            { code: "KJ14", name: "Pasar Seni", lines: "LRT Kelana Jaya", extra: "Direct interchange to MRT Kajang line. Beautiful transit art inside. Chinatown gate is right outside.", eat: "Central Market food court (traditional local delicacies), Chinatown claypot rice.", travel: "Walk across the pedestrian link bridge to central terminal hubs for regional RapidKL public buses." },
+                            { code: "KJ15", name: "KL Sentral Hub", lines: "LRT Kelana Jaya / Monorail / KTM", extra: "Kuala Lumpur's supreme central hub. Merges LRT, MRT, Monorail, KTM Komuter, ETS long distance rails, and airport links.", eat: "Nu Sentral Mall Level 3 & Level 4 has over 80 dining spots ranging from local to global dishes.", travel: "Basement level buses drive non-stop to Genting Highlands and KLIA airport terminals (cheap RM15 transit options!)" },
+                            { code: "KJ37", name: "Putra Heights Terminus", lines: "LRT Kelana Jaya", extra: "Merging station with Sri Petaling LRT line. Dual-platform setup allows rapid transfers by walking directly across the track yard.", eat: "Cozy suburban shops and local cafes right outside the street toll barrier.", travel: "Buses connect from here deep into Puchong and Shah Alam southern zones." },
+                            { code: "KG04", name: "Kwasa Damansara", lines: "MRT Kajang", extra: "Dual terminus of Kajang MRT and Putrajaya MRT lines. Open air-con format. Very clean suburbia setting.", eat: "Snack kiosks inside the paid platform area.", travel: "Easy platform skip to transfer in 20 seconds between lines." },
+                            { code: "KG15", name: "Muzium Negara", lines: "MRT Kajang", extra: "Located adjacent to National Museum. Features deep air-con subway with historical artifacts models.", eat: "Premium hotel cafes or cross the 250m link bridge inside to KL Sentral food zones.", travel: "Exit A leads directly to the National Museum of History entrances." },
+                            { code: "KG16", name: "Pasar Seni", lines: "MRT Kajang / LRT", extra: "Chinatown gateway. Beautiful deep blue glazed wall tiles representing the confluence of KL's local heritage.", eat: "Petaling Street night market stalls and modern hipster cafés.", travel: "Chinatown, Central Market and historic colonial structures are reachable instantly." },
+                            { code: "KG18A", name: "Bukit Bintang", lines: "MRT Kajang", extra: "Kuala Lumpur's primary shopping core. Underground levels feature massive passenger escalators. Exit D takes you to Lot 10, Exit E to Pavilion.", eat: "Lot 10 Hutong food court (collects legendary local heritage brand stalls), Jalan Alor food street.", travel: "Interchange directly to Monorail via the pedestrian deck. Golden Triangle nightlife is strictly accessible here!" },
+                            { code: "KG20", name: "Tun Razak Exchange TRX", lines: "MRT Kajang / Putrajaya", extra: "Major banking and lifestyle district. Deepest active underground station in Malaysia. Connected directly inside to TRX Exchange Mall.", eat: "High-end dining hall inside TRX mall & premium fast casual eateries.", travel: "Seamless interchange from Kajang Line to Putrajaya LRT line via descending multi-level floor tracks." },
+                            { code: "KG35", name: "Kajang Terminus", lines: "MRT Kajang", extra: "Eastern terminus. Merges with KTM heavy rails.", eat: "Famous Kajang Satay skewered meats is available just a short taxi run away.", travel: "KTM commuter train connections to southern Negeri Sembilan lines." },
+                            { code: "PY20", name: "Ampang Park", lines: "MRT Putrajaya", extra: "High-tech business core. Modern underground pedestrian walkway connects to LRT Ampang Park station.", eat: "Intermark mall dining basement, local food courts in surrounding office buildings.", travel: "Easy commute to near Embassy Row and central business districts." },
+                            { code: "PY41", name: "Putrajaya Sentral Terminus", lines: "MRT Putrajaya / ERL", extra: "Terminal gateway. Modern white dome-styled architecture.", eat: "Snacks in terminals, terminal food counters.", travel: "NadiPutra city buses depart regularly to Prime Government Offices & Pink Mosque." },
+                            { code: "MR1", name: "KL Sentral Monorail", lines: "KL Monorail", extra: "Standalone outdoor terminal station. Connects to LRT inside via walking level 2 of Nu Sentral.", eat: "Nu Sentral food brands.", travel: "Monorail rides elevated along Brickfields Indian quarter." },
+                            { code: "MR4", name: "Hang Tuah", lines: "KL Monorail / LRT", extra: "Interchange to Ampang LRT. Connects straight into Lalaport shopping mall lower doors.", eat: "Lalaport Japanese food street, local street foods.", travel: "Cross the platform bridge to access LRT Ampang lines." },
+                            { code: "KC05", name: "Batu Caves Terminus", lines: "KTM Komuter", extra: "Famous religious destination. Direct gate access to cave temple properties.", eat: "Traditional South Indian vegetarian curries and teas just right outside.", travel: "Monkey sanctuary and central shrines located 200m away." },
+                            { code: "KE2", name: "Bandar Tasik Selatan (TBS)", lines: "ERL Airport Link / KTM / LRT", extra: "Hub with direct intercity bus terminal connections.", eat: "TBS terminal food hall and quick bites.", travel: "Purchase long-distance bus tickets to Penang, Johor Bahru, and Singapore." }
+                          ];
+                          const activeInfo = allStList.find(a => a.code === selectedStationCode) || allStList[5]; // default to KL Sentral
+                          return (
+                            <div className="space-y-3.5 mt-2 animate-fade-in text-xs">
+                              <div>
+                                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 dark:text-zinc-500">Active Station Selected</span>
+                                <h4 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white -mt-1">{activeInfo.name}</h4>
+                                <span className="inline-block mt-1 font-mono text-[10px] font-semibold bg-sky-50 dark:bg-zinc-800 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded">
+                                  {activeInfo.lines}
+                                </span>
+                              </div>
+
+                              <div className="p-3 bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-xl space-y-2 text-[11px] text-slate-600 dark:text-zinc-300 leading-relaxed">
+                                <p><strong>ℹ️ Station Context:</strong> {activeInfo.extra}</p>
+                                <p><strong>🍲 Dining Scene:</strong> {activeInfo.eat}</p>
+                                <p><strong>🗺️ Tourist Guide:</strong> {activeInfo.travel}</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="mt-4 p-3 bg-blue-50/60 border border-blue-100 dark:bg-zinc-900 dark:border-zinc-800 rounded-xl leading-relaxed shrink-0">
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Interchange Reminder</p>
+                        <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-0.5">
+                          At combined transit stations (e.g. Majid Jamek and Pasar Seni), follow the colorful floor stickers on the pedestrian ground to swap lines without tapping out.
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* ==================== 2. VISUAL TICKETING FLOWS (NO EXCESSIVE WORDS) ==================== */}
+              {activeTab === "ticketing" && (
+                <div className="space-y-6">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed">
+                    {lang === "en" ? "Kuala Lumpur's public rail system suggests 3 simple payment options. Choose one below to see the precise visual process." :
+                     lang === "bm" ? "Sistem rel kuala lumpur menyokong 3 kaedah utama bayaran. Sila pilih satu untuk melihat panduan langkah demi langkah visual." :
+                     lang === "zh" ? "吉隆坡轨道交通系统推荐 3 种乘车支付方式。请在下方点击了解极其直观的乘车步骤。" :
+                     "பயண டிக்கெட்டுகளுக்கான 3 எளிய வழிமுறைகள் கீழே விளக்கப்பட்டுள்ளன."}
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    
+                    {/* Ticketing Option A: TnG Smartcard */}
+                    <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0 shadow-sm border border-blue-200/50">
+                            <CreditCard size={20} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-blue-500">Option 01 • Dynamic Smartcard</span>
+                            <h4 className="font-bold text-slate-800 dark:text-white text-sm sm:text-base -mt-0.5">Touch 'n Go</h4>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 relative pl-5 border-l border-slate-100 dark:border-zinc-800">
+                          {[
+                            { num: "01", title: "Counter Buy", desc: "Purchase card at any LRT/MRT Customer Counter. Total cost: RM15.00 (Includes RM10.00 preloaded fund & RM5.00 card fee)." },
+                            { num: "02", title: "Tap to Enter", desc: "Hold card close to the yellow circle reader on the turnstile gates when entering the platform." },
+                            { num: "03", title: "Dynamic debit", desc: "Tap again at exit gates. Fare is calculated dynamically and subtracted automatically. Safe and saves 10%!" }
+                          ].map((step, idx) => (
+                            <div key={idx} className="relative">
+                              <div className="absolute -left-[30px] top-1.5 w-4 h-4 bg-blue-500 text-white font-mono text-[9px] font-bold rounded-full flex items-center justify-center shadow">
+                                {step.num}
+                              </div>
+                              <h5 className="font-bold text-xs text-slate-700 dark:text-zinc-200">{step.title}</h5>
+                              <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 mt-0.5 leading-relaxed">{step.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800 text-[10px] text-blue-500 font-bold bg-blue-50/50 p-2 rounded-xl border border-blue-100/40">
+                        ⭐ Passenger TIP: Best for visitors doing 4+ rides. Widely accepted inside taxis, convenience shops, and cafes.
+                      </div>
+                    </div>
+
+                    {/* Ticketing Option B: Single token red coin */}
+                    <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0 shadow-sm border border-orange-200/50">
+                            <Layers size={20} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-orange-500">Option 02 • Single Trip Cashless</span>
+                            <h4 className="font-bold text-slate-800 dark:text-white text-sm sm:text-base -mt-0.5">Single-Trip Token</h4>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 relative pl-5 border-l border-slate-100 dark:border-zinc-800">
+                          {[
+                            { num: "01", title: "Vending Screen", desc: "Visit the blue/red Ticket Vending Machine (TVM) kiosk in any station hall. Touch screen and choose your destination." },
+                            { num: "02", title: "Retrieve Token", desc: "Pay with currency notes or coins. Retrieve the physical red plastic token from the tray below." },
+                            { num: "03", title: "Tap & Exit Drop", desc: "Tap the token on the gates reader to enter. On arrival, simply drop the red token inside the slot at the exit gates!" }
+                          ].map((step, idx) => (
+                            <div key={idx} className="relative">
+                              <div className="absolute -left-[30px] top-1.5 w-4 h-4 bg-orange-500 text-white font-mono text-[9px] font-bold rounded-full flex items-center justify-center shadow">
+                                {step.num}
+                              </div>
+                              <h5 className="font-bold text-xs text-slate-700 dark:text-zinc-200">{step.title}</h5>
+                              <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 mt-0.5 leading-relaxed">{step.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800 text-[10px] text-orange-600 font-bold bg-orange-50/50 p-2 rounded-xl border border-orange-100/40">
+                        ⭐ Passenger TIP: Best for single casual trips. Many machines do not accept RM20/RM50, try to carry small RM1 / RM5 notes.
+                      </div>
+                    </div>
+
+                    {/* Ticketing Option C: MyCity Tourist Pass */}
+                    <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 shrink-0 shadow-sm border border-purple-200/50">
+                            <Ticket size={20} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-purple-500">Option 03 • Unlimited Pass</span>
+                            <h4 className="font-bold text-slate-800 dark:text-white text-sm sm:text-base -mt-0.5">MyCity Visitor Pass</h4>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 relative pl-5 border-l border-slate-100 dark:border-zinc-800">
+                          {[
+                            { num: "01", title: "Counter Visit", desc: "Present your passport/ID to the officer at any RapidKL Customer Service Counter." },
+                            { num: "02", title: "Choose Duration", desc: "Purchase 1-Day Pass (RM5.00) or 3-Day Pass (RM15.00). Card is loaded electronically instantly." },
+                            { num: "03", title: "Unlimited Taps", desc: "Tap endlessly in and out across all RapidKL LRT, MRT, and Monorail lines. Zero travel charges apply!" }
+                          ].map((step, idx) => (
+                            <div key={idx} className="relative">
+                              <div className="absolute -left-[30px] top-1.5 w-4 h-4 bg-purple-500 text-white font-mono text-[9px] font-bold rounded-full flex items-center justify-center shadow">
+                                {step.num}
+                              </div>
+                              <h5 className="font-bold text-xs text-slate-700 dark:text-zinc-200">{step.title}</h5>
+                              <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 mt-0.5 leading-relaxed">{step.desc}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-zinc-800 text-[10px] text-purple-600 font-bold bg-purple-50/50 p-2 rounded-xl border border-purple-100/40">
+                        ⭐ Passenger TIP: Absolute savings for active sightseeing routes. Does NOT cover KTM commuter railways or airport high systems.
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* ==================== 3. POLITE, FRIENDLY SMART TIPS (NO SCISSORING OR RED SCOLDING) ==================== */}
+              {activeTab === "tips" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed mb-1">
+                    {lang === "en" ? "Here are some friendly local observations and commuter recommendation hacks to ensure your journey across Kuala Lumpur is entirely comfortable." :
+                     lang === "bm" ? "Berikut adalah beberapa panduan mesra penduduk tempatan dan syor komuter bagi memastikan perjalanan anda di Kuala Lumpur berjalan lancar." :
+                     lang === "zh" ? "以下为您汇总吉隆坡本地暖心的乘车观察与通勤小建议，助力实现极为顺畅的旅途。" :
+                     "உங்கள் பயணம் பாதுகாப்பானதாகவும் எளிமையானதாகவும் அமைய சில அன்பான ஆலோசனைகள்."}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {TRANSIT_TIPS[lang]?.map((tip, idx) => (
+                      <div key={idx} className="p-4 bg-emerald-50/60 dark:bg-emerald-950/15 border border-emerald-150 dark:border-emerald-900/60 rounded-2xl flex gap-3.5 items-start transition hover:translate-y-[-1px] hover:shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 shrink-0 font-bold">
+                          💡
+                        </div>
+                        <div className="space-y-1.5 min-w-0">
+                          <h4 className="font-extrabold text-slate-800 dark:text-white text-xs sm:text-sm uppercase tracking-wider">
+                            {tip.title}
+                          </h4>
+                          <div>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-450 font-bold">💡 What you should know:</span>
+                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed -mt-0.5">{tip.warning}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-bold">⭐ Guest Advice Guideline:</span>
+                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed -mt-0.5 font-medium">{tip.solution}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ==================== 4. FARES & DETAILED PAYMENTS MATRIX ==================== */}
+              {activeTab === "fares" && (
+                <div className="space-y-5">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed mb-2">
+                    {lang === "en" ? "Fares are calculated strictly based on the distance traversed. Check the visual options matrix below for payment compatibility details." :
+                     lang === "bm" ? "Tambang dikira mengikut jarak perjalanan. Sila semak jadual keserasian pembayaran di bawah untuk persediaan kad." :
+                     lang === "zh" ? "乘车票价严格基于行车里程计费。请务必参考下方的支付渠道兼容表，避免无法进站。" :
+                     "ரயில் சேவை வாரியாக நீங்கள் பயன்படுத்தக்கூடிய கட்டண முறைகள் கீழே பட்டியலிடப்பட்டுள்ளன."}
+                  </p>
+
+                  {/* 4A. Travel Type Category badging */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
+                    {[
+                      { icon: <Train size={15} />, text: "LRT / MRT lines", desc: "Urban Heavy Rail", color: "text-rose-500 bg-rose-50" },
+                      { icon: <Train size={15} />, text: "Monorail Line", desc: "Central Elevated", color: "text-amber-500 bg-amber-50" },
+                      { icon: <Train size={15} />, text: "KTM Railways", desc: "Suburban Regional", color: "text-blue-500 bg-blue-50" },
+                      { icon: <Train size={15} />, text: "Airport Rails", desc: "Direct Gateway Link", color: "text-purple-500 bg-purple-50" },
+                      { icon: <Bus size={15} />, text: "RapidKL Buses", desc: "Feeder & Major Corridors", color: "text-emerald-500 bg-emerald-50" }
+                    ].map((vt, vIdx) => (
+                      <div key={vIdx} className="bg-white dark:bg-zinc-800 p-3 rounded-xl border border-slate-200 dark:border-zinc-700/80 hover:shadow-sm transition-all text-center">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-1.5 ${vt.color} dark:bg-zinc-900`}>
+                          {vt.icon}
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-800 dark:text-white truncate">{vt.text}</h5>
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-400">{vt.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 4B. Open Payment Coverage Grid Table */}
+                  <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm text-xs space-y-4">
+                    <h4 className="font-bold text-slate-800 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <CreditCard size={15} className="text-malaysia-blue dark:text-blue-400" />
+                      KL Open Payments Matrix (Tourist Guide)
+                    </h4>
+                    
+                    <div className="overflow-x-auto select-none rounded-xl border border-slate-100 dark:border-zinc-700">
+                      <table className="w-full text-[11px] text-left">
+                        <thead className="bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-zinc-400 uppercase tracking-wide font-mono text-[10px] border-b border-slate-200 dark:border-zinc-700">
+                          <tr>
+                            <th className="p-3">Payment Method</th>
+                            <th className="p-3">LRT / MRT / Monorail</th>
+                            <th className="p-3">KTM Komuter</th>
+                            <th className="p-3">ERL Airport Line</th>
+                            <th className="p-3">RapidKL Buses</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-zinc-800 leading-normal text-slate-700 dark:text-zinc-300">
+                          {[
+                            { name: "💳 Touch 'n Go (Physical Card)", lrt: "YES ✅", ktm: "YES ✅", erl: "YES ✅", bus: "YES ✅", tip: "Ultimate compatibility. Fully accepted everywhere." },
+                            { name: "🏧 Bank Credit/Debit Cards (Visa/MC)", lrt: "NO ❌ (Planned)", ktm: "YES ✅ (Tap at gate)", erl: "YES ✅ (Tap at gate)", bus: "NO ❌", tip: "KTM and ERL support direct bank card taps on ticket gates!" },
+                            { name: "📱 Mobile Pay (Apple / Google NFT Wallet)", lrt: "NO ❌", ktm: "YES ✅", erl: "YES ✅", bus: "NO ❌", tip: "Requires foreign NFC wallets connected to Visa/Mastercard." },
+                            { name: "🔴 Cash Physical Coin (Tokens)", lrt: "YES ✅ (Buy at kiosk)", ktm: "NO ❌ (Cashless only)", erl: "YES ✅ (Buy at window)", bus: "NO ❌ (TnG only)", tip: "Only LRT/MRT kiosks sell single journey cash tokens." }
+                          ].map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/40">
+                              <td className="p-3 font-semibold text-slate-900 dark:text-white whitespace-nowrap">{row.name}</td>
+                              <td className="p-3 font-medium">{row.lrt}</td>
+                              <td className="p-3 font-medium">{row.ktm}</td>
+                              <td className="p-3 font-medium">{row.erl}</td>
+                              <td className="p-3 font-medium">{row.bus}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="p-3 bg-rose-50/50 dark:bg-rose-950/15 border border-rose-100 dark:border-rose-900/40 rounded-xl leading-relaxed text-[11px] text-rose-800 dark:text-rose-300">
+                      <strong>⚠️ Critical Tourist Warning:</strong> Direct Bank Credit cards, Apple Pay, and Google Pay do **NOT** work at standard LRT and MRT ticket gates in Kuala Lumpur yet. If you only possess a bank card, you must buy a physical cash token at the train station kiosks or visit the customer counter to purchase a Touch 'n Go card.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ==================== 5. STATION INDOOR NAVIGATION MAPS ==================== */}
+              {activeTab === "maps" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed">
+                    {lang === "en" ? "Kuala Lumpur's terminal hubs can be confusing to navigate. Choose a station and floor level below to view a clean concourse blueprint." :
+                     lang === "bm" ? "Stesen utama Kuala Lumpur kadangkala agak mengelirukan. Pilih stesen dan tingkat di bawah untuk panduan terminal mesra pelancong." :
+                     lang === "zh" ? "吉隆坡交通枢纽内部路线十分繁杂。请在下方点击楼层，查看极简布局导览及游客建议。" :
+                     "ரயில் நிலையங்களின் வழிகாட்டிகள் மற்றும் உட்புற வரைபடங்கள் கீழே இணைக்கப்பட்டுள்ளன."}
+                  </p>
+
+                  {/* 5A. Station selectors */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedMapStation("kl-sentral");
+                        setSelectedMapLevel(1);
+                        setSelectedMapNode("lrt-gates");
+                      }}
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
+                        selectedMapStation === "kl-sentral"
+                          ? "bg-white dark:bg-zinc-850 border-slate-350 dark:border-zinc-700 shadow-sm"
+                          : "bg-slate-100/75 dark:bg-zinc-900 border-transparent text-slate-500 dark:text-zinc-400"
+                      }`}
+                    >
+                      <MapPin size={14} />
+                      KL Sentral Hub 🚉
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedMapStation("masjid-jamek");
+                        setSelectedMapLevel(0);
+                        setSelectedMapNode("mj-l0-gates");
+                      }}
+                      className={`px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
+                        selectedMapStation === "masjid-jamek"
+                          ? "bg-white dark:bg-zinc-850 border-slate-350 dark:border-zinc-700 shadow-sm"
+                          : "bg-slate-100/75 dark:bg-zinc-900 border-transparent text-slate-500 dark:text-zinc-400"
+                      }`}
+                    >
+                      <MapPin size={14} />
+                      Masjid Jamek Interchange 🕌
+                    </button>
+                  </div>
+
+                  {/* 5B. Floor Level selector tabs */}
+                  <div className="flex bg-slate-100/70 dark:bg-zinc-850 p-1 rounded-xl text-xs font-bold self-start max-w-sm">
+                    {selectedMapStation === "kl-sentral" ? (
+                      [
+                        { lvl: 2, label: "L2 (Nu Sentral Mall Link)" },
+                        { lvl: 1, label: "L1 (LRT Concourse & Gates)" },
+                        { lvl: 0, label: "L0 (Heavy Rail - Ground)" }
+                      ].map((item) => (
+                        <button
+                          key={item.lvl}
+                          onClick={() => {
+                            setSelectedMapLevel(item.lvl);
+                            if (item.lvl === 2) setSelectedMapNode("l2-nusentral-bridge");
+                            else if (item.lvl === 1) setSelectedMapNode("lrt-gates");
+                            else setSelectedMapNode("l0-ktm-gates");
+                          }}
+                          className={`flex-1 px-3 py-2 rounded-lg text-center transition cursor-pointer ${
+                            selectedMapLevel === item.lvl
+                              ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-xs"
+                              : "text-slate-500 dark:text-zinc-400 hover:text-slate-800"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))
+                    ) : (
+                      [
+                        { lvl: 1, label: "L1 (Elevated Platforms)" },
+                        { lvl: 0, label: "L0 (Street & Ticket Concourse)" },
+                        { lvl: -1, label: "L-1 (Kelana Jaya LRT Deep)" }
+                      ].map((item) => (
+                        <button
+                          key={item.lvl}
+                          onClick={() => {
+                            setSelectedMapLevel(item.lvl);
+                            if (item.lvl === 1) setSelectedMapNode("mj-l1-ampang");
+                            else if (item.lvl === 0) setSelectedMapNode("mj-l0-gates");
+                            else setSelectedMapNode("mj-l-1-kelanajaya");
+                          }}
+                          className={`flex-1 px-3 py-2 rounded-lg text-center transition cursor-pointer ${
+                            selectedMapLevel === item.lvl
+                              ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-xs"
+                              : "text-slate-500 dark:text-zinc-400 hover:text-slate-800"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* 5C. Two-Panel: Interactive blueprint mockup + Node explanation popup */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+                    
+                    {/* Panel Left: Interactive schematics of chosen level */}
+                    <div className="md:col-span-7 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between min-h-[300px]">
+                      <div>
+                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-mono font-bold tracking-wider mb-2">Concourse blueprint layout</div>
+                        
+                        {/* Blueprint Container Box */}
+                        <div className="bg-dashed bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-2xl relative min-h-[260px] flex overflow-hidden">
+                          {selectedMapStation === "kl-sentral" && (
+                            <div className="flex flex-col w-full h-full">
+                              
+                              {/* Level 2 */}
+                              <div className={`p-4 border-b border-slate-200 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 2 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
+                                <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L2</div>
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {[
+                                    { id: "l2-nusentral-bridge", label: "Nu Sentral Link Bridge", detail: "Skywalk escalators linking directly inside the mall. Walk straight this way towards Monorail gates." },
+                                    { id: "l2-foodcourt", label: "Food Concourse & Retail", detail: "Over 20 eateries, bubble teas, coffee shops, and bakeries. Departure Hall for ETS." }
+                                  ].map(node => (
+                                    <button
+                                      key={node.id}
+                                      onClick={() => { setSelectedMapLevel(2); setSelectedMapNode(node.id); }}
+                                      className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
+                                        selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {node.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Level 1 */}
+                              <div className={`p-4 border-b border-slate-200 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 1 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
+                                <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L1</div>
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {[
+                                    { id: "lrt-gates", label: "LRT & Main Concourse", detail: "Connecting hub. LRT Kelana Jaya gates, KTM Komuter ticketing, and ERL Ticketing." },
+                                    { id: "l1-tng-refund", label: "Ticketing & Touch 'n Go", detail: "Customer service counters, self-service kiosks, and transit police station." }
+                                  ].map(node => (
+                                    <button
+                                      key={node.id}
+                                      onClick={() => { setSelectedMapLevel(1); setSelectedMapNode(node.id); }}
+                                      className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
+                                        selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {node.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Level 0 */}
+                              <div className={`p-4 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 0 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
+                                <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L0</div>
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {[
+                                    { id: "l0-ktm-gates", label: "KTM & Rail Platforms", detail: "Ground floor boarding platforms for KTM Komuter and intercity ETS trains." },
+                                    { id: "l0-erl-gates", label: "KLIA Transit & Express", detail: "Fast trains to KLIA T1 & T2. Dedicated waiting areas and baggage drop-off." }
+                                  ].map(node => (
+                                    <button
+                                      key={node.id}
+                                      onClick={() => { setSelectedMapLevel(0); setSelectedMapNode(node.id); }}
+                                      className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
+                                        selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {node.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                            </div>
+                          )}
+
+                          {selectedMapStation === "masjid-jamek" && (
+                            <div className="grid grid-cols-2 gap-3 w-full p-5">
+                            {/* MASJID JAMEK FLOWS */}
+                            {selectedMapLevel === 1 && [
+                              { id: "mj-l1-ampang", label: "Ampang elevated track platform", detail: "Spans towards Sentul East or Ampang/Putra Heights. Open-air format. Elevators are accessible." }
+                            ].map(node => (
+                              <button
+                                key={node.id}
+                                onClick={() => setSelectedMapNode(node.id)}
+                                className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
+                                  selectedMapNode === node.id
+                                    ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
+                                    : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 font-bold"
+                                }`}
+                              >
+                                {node.label}
+                              </button>
+                            ))}
+
+                            {selectedMapStation === "masjid-jamek" && selectedMapLevel === 0 && [
+                              { id: "mj-l0-gates", label: "Main Unified Ticket Gates", detail: "Universal barrier gates. Seamless walk-through to transfer from LRT Ampang to LRT Kelana Jaya." },
+                              { id: "mj-l0-street", label: "Street Level historic exits", detail: "Leads straight to the scenic Jamek Mosque, Colonial arches district, and traditional market bazaar." }
+                            ].map(node => (
+                              <button
+                                key={node.id}
+                                onClick={() => setSelectedMapNode(node.id)}
+                                className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
+                                  selectedMapNode === node.id
+                                    ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
+                                    : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-650 dark:text-zinc-300 font-bold"
+                                }`}
+                              >
+                                {node.label}
+                              </button>
+                            ))}
+
+                            {selectedMapStation === "masjid-jamek" && selectedMapLevel === -1 && [
+                              { id: "mj-l-1-kelanajaya", label: "Kelana Jaya underground track platform", detail: "Subterranean heavy rails towards KLCC / Gombak, or south to KL Sentral. Fully air-conditioned block with shield gates." }
+                            ].map(node => (
+                              <button
+                                key={node.id}
+                                onClick={() => setSelectedMapNode(node.id)}
+                                className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
+                                  selectedMapNode === node.id
+                                    ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
+                                    : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 font-bold"
+                                }`}
+                              >
+                                {node.label}
+                              </button>
+                            ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Panel Right: Explanation box */}
+                    <div className="md:col-span-5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                          <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm uppercase tracking-wider">
+                            Location Guidelines
+                          </h4>
+                        </div>
+
+                        {(() => {
+                          const nodesList = [
+                            { id: "l2-nusentral-bridge", name: "Nu Sentral Link Bridge", desc: "A modern covered escalator bridge. Allows direct walk-through into Nu Sentral retail complex level 1. Safe from rainfall and traffic noise." },
+                            { id: "l2-foodcourt", name: "Nu Sentral Food Concourse", desc: "Located at Level 2/3 of Nu Sentral. Houses a diverse selection of cheap local noodle spots, fast food, tea counters, and bakery shops." },
+                            { id: "l2-elevators", name: "Main Core Elevator Towers", desc: "Vertical high-capacity smart elevators, linking Level 2 directly downwards to primary transit gates and suburban train halls." },
+                            { id: "lrt-gates", name: "LRT Kelana Jaya Turnstiles", desc: "LRT terminal entryways. Tapping physical Touch 'n Go card or blue tokens opens gates. Make sure to tap at the red glowing arrow paths." },
+                            { id: "lrt-office", name: "RapidKL Customer Counter", desc: "Staffed cashier and helper booth right before the turnstile row. Purchase fresh Touch 'n Go magnetic cards, top-up balances, or request student discount registrations." },
+                            { id: "l1-tng-refund", name: "TnG Self-Service Kiosks", desc: "Digital vending box. Insert banking cards or mobile cards to refill TnG balances. Standard processing incorporates 0% service fees." },
+                            { id: "l1-tvm-kiosks", name: "Ticket Vending Machines (TVM)", desc: "Row of large screens. Select destinations to buy single journey physical reddish coin tokens. Accept RM1, RM5 notes and coins." },
+                            { id: "l0-ktm-gates", name: "KTM Heavy Rail Gates", desc: "Ticket turnstiles positioned at Level 0 concourse towards commuter suburban carriages. Highly distinct from LRT lines." },
+                            { id: "l0-erl-gates", name: "KLIA Airport Express Gates", desc: "Direct ticket gate area leading to non-stop airport rail platform. Requires separate premium tickets or online booking vounchers." },
+                            { id: "l0-baggage", name: "Baggage Storage Counter", desc: "A physical counter offering secure temporary storage for luggage. Highly accessible for tourists having late departures." },
+                            { id: "mj-l1-ampang", name: "Ampang elevated track platform", desc: "Located elevated on Level 1. Direct cross-platform links to travel north or south. Hot and breezy." },
+                            { id: "mj-l0-gates", name: "Main Unified Ticket Gates", desc: "Integrated gate lobby at Masjid Jamek ground level. Completely unified, enabling smooth LRT swaps." },
+                            { id: "mj-l0-street", name: "Street Level historic exits", desc: "Exiting gates brings you straight in front of Masjid Jamek mosque structures, adjacent markets, and old heritage buildings." },
+                            { id: "mj-l-1-kelanajaya", name: "Kelana Jaya underground track platform", desc: "Fully underground, air-conditioned subway platform with glass platform shield doors. Direct trains to KLCC and KL Sentral." }
+                          ];
+                          const activeNode = nodesList.find(n => n.id === selectedMapNode) || nodesList[3];
+                          return (
+                            <div className="space-y-3 mt-1.5 text-xs animate-fade-in">
+                              <h5 className="font-extrabold text-[13px] text-slate-800 dark:text-white">{activeNode.name}</h5>
+                              <p className="text-slate-650 dark:text-zinc-300 leading-relaxed text-[11px] bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-850 p-3 rounded-xl">
+                                {activeNode.desc}
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="mt-4 p-2 bg-amber-50/75 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/40 rounded-xl leading-normal text-[10.5px] text-amber-800 dark:text-amber-350 shrink-0">
+                        📌 Navigation Tip: Spot the large hanging signs overhead inside stations. Blue labels point towards LRT, Green towards MRT, Yellow towards Monorail, and Orange towards KTM Komuter.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* ==========================================
+          MOBILE BOTTOM NAVIGATION TAB BAR
+          ========================================== */}
+      <nav id="mobile-tab-navigation" className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-zinc-800 border-t border-slate-200 dark:border-zinc-700 h-[68px] flex items-center justify-around px-2 py-1 z-40 shadow-inner">
+        
+        <button
+          onClick={() => setActiveTab("arrivals")}
+          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
+            activeTab === "arrivals"
+              ? "text-malaysia-blue dark:text-blue-400 font-bold"
+              : "text-slate-400 dark:text-zinc-500"
+          }`}
+        >
+          <Clock size={18} />
+          <span className="text-[10px] uppercase font-bold mt-1">Arrivals</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("planner")}
+          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
+            activeTab === "planner"
+              ? "text-malaysia-blue dark:text-blue-400 font-bold"
+              : "text-slate-400 dark:text-zinc-500"
+          }`}
+        >
+          <Compass size={18} />
+          <span className="text-[10px] uppercase font-bold mt-1">Planner</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("network")}
+          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
+            activeTab === "network"
+              ? "text-malaysia-blue dark:text-blue-400 font-bold"
+              : "text-slate-400 dark:text-zinc-500"
+          }`}
+        >
+          <Network size={18} />
+          <span className="text-[10px] uppercase font-bold mt-1">Routes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("ticketing")}
+          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
+            activeTab === "ticketing"
+              ? "text-malaysia-blue dark:text-blue-400 font-bold"
+              : "text-slate-400 dark:text-zinc-500"
+          }`}
+        >
+          <Ticket size={18} />
+          <span className="text-[10px] uppercase font-bold mt-1">Passes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("maps")}
+          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
+            activeTab === "maps"
+              ? "text-malaysia-blue dark:text-blue-400 font-bold"
+              : "text-slate-400 dark:text-zinc-500"
+          }`}
+        >
+          <Map size={18} />
+          <span className="text-[10px] uppercase font-bold mt-1">Maps</span>
+        </button>
+
+      </nav>
+
+      {/* ==========================================
+          AI CHAT FLOATING BUBBLE & WINDOW
+          ========================================== */}
+      <AnimatePresence>
+        {isChatOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-24 right-4 md:bottom-24 md:right-8 w-[calc(100vw-32px)] md:w-[400px] h-[550px] max-h-[75vh] bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-zinc-700 flex flex-col z-50 overflow-hidden"
+          >
+            {/* Chat header */}
+            <div className="bg-malaysia-blue text-white p-3.5 flex items-center justify-between shadow-sm shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={18} />
+                <span className="font-bold text-sm">TransitMY AI</span>
+              </div>
+              <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-white/20 rounded-full transition cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* standard Chat conversation container */}
+            <div className="flex-1 p-3 sm:p-5 overflow-y-auto space-y-4 sm:space-y-6">
+              
+              {messages.map((item) => {
+                const isUser = item.role === "user";
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex ${isUser ? "flex-row-reverse" : "flex-row"} gap-2 sm:gap-3 max-w-[90%] ${
+                      isUser ? "ml-auto" : "mr-auto"
+                    }`}
+                  >
+                    {/* Persona Avatar icons */}
+                    <div
+                      className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-extrabold shadow-sm ${
+                        isUser
+                          ? "bg-slate-800 text-white"
+                          : "bg-malaysia-blue text-white"
+                      }`}
+                    >
+                      {isUser ? "YOU" : "T-MY"}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div
+                        className={`p-3 sm:p-4 rounded-2xl text-sm leading-relaxed ${
+                          isUser
+                            ? "bg-malaysia-blue text-white rounded-tr-none shadow"
+                            : item.isError
+                            ? "bg-red-50 dark:bg-zinc-900/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900 rounded-tl-none font-medium"
+                            : "bg-slate-100 dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 rounded-tl-none shadow-sm"
+                        }`}
+                      >
+                        {isUser ? (
+                          item.text
+                        ) : (
+                          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-snug prose-li:my-0.5 max-w-full overflow-hidden break-words">
+                            <ReactMarkdown>{item.text}</ReactMarkdown>
+                          </div>
+                        )}
+
+                        {/* Rendering attached base64 image thumbnail if present in conversation bubble */}
+                        {item.image && (
+                          <div className="mt-2.5 max-w-[200px] rounded-lg overflow-hidden border border-slate-300 dark:border-zinc-700 shadow-sm bg-white dark:bg-zinc-800 p-1">
+                            <img
+                              src={item.image.data.startsWith("data:") ? item.image.data : `data:${item.image.mimeType};base64,${item.image.data}`}
+                              alt="Uploaded signage attachment"
+                              className="w-full h-auto object-cover max-h-40 rounded"
+                            />
+                            <p className="text-[10px] opacity-80 mt-1 italic text-center">
+                              Sign / ticket photo attached
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <span className="block text-[10px] text-slate-400 dark:text-zinc-500 px-1 font-medium text-right">
+                        {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Server interaction Loading indicator */}
+              {loading && (
+                <div className="flex gap-3 max-w-[80%]">
+                  <div className="w-8 h-8 rounded-full bg-malaysia-blue text-white shrink-0 flex items-center justify-center text-[10px] font-bold animate-pulse">
+                    T-MY
+                  </div>
+                  <div className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl rounded-tl-none text-sm dark:text-zinc-300 flex items-center gap-2 shadow-sm border border-slate-200 dark:border-zinc-800">
+                    <span className="w-2 h-2 rounded-full bg-malaysia-blue animate-bounce"></span>
+                    <span className="w-2 h-2 rounded-full bg-malaysia-blue animate-bounce [animation-delay:0.2s]"></span>
+                    <span className="w-2 h-2 rounded-full bg-malaysia-blue animate-bounce [animation-delay:0.4s]"></span>
+                    <span className="text-xs text-slate-400 shrink-0 font-medium ml-1">Thinking...</span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Bottom Control Box containing suggestions row and inputs bar */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 shrink-0">
+              
+              {/* Suggester prompt chips area */}
+              {messages.length <= 1 && (
+                <div className="mb-3.5">
+                  <p className="text-[10px] font-extrabold text-slate-400 dark:text-zinc-500 uppercase tracking-wider mb-2">
+                    {t.starterPromptTitle}
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto select-none py-1 scrollbar-hide">
+                    {SUGGESTED_PROMPTS[lang].map((prompt, pIdx) => (
+                      <button
+                        key={pIdx}
+                        onClick={() => handleSuggestedPrompt(prompt)}
+                        className="flex-shrink-0 text-left py-1.5 px-3 bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700/80 hover:scale-[1.01] transition border border-slate-200/85 dark:border-zinc-700/80 rounded-xl text-[11px] font-semibold text-slate-600 dark:text-zinc-300"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Image upload attachment thumbnail panel */}
+              {selectedImage && (
+                <div className="mb-3 p-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl flex items-center justify-between gap-3 animate-fade-in animate-pulse">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 border border-slate-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 overflow-hidden shrink-0">
+                      <img src={selectedImage.previewUrl} alt="Upload Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-700 dark:text-zinc-200 truncate">
+                        Photo attached
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={removeSelectedImage}
+                    className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
+              {/* Primary input toolbar */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-zinc-900 p-2 rounded-2xl border border-slate-200 dark:border-zinc-700">
+                
+                {/* Hidden File Input for photo recognition */}
+                <input
+                  type="file"
+                  id="transitmy-photo-uploader"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  id="btn-upload-image"
+                  onClick={triggerImageSelector}
+                  className={`w-9 h-9 shrink-0 flex items-center justify-center rounded-xl cursor-pointer transition ${
+                    selectedImage 
+                      ? "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" 
+                      : "text-slate-400 dark:text-zinc-500 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-zinc-850"
+                  }`}
+                  title={t.cameraPrompt}
+                >
+                  <ImageIcon size={18} />
+                </button>
+
+                <textarea
+                  id="chat-textarea-input"
+                  rows={1}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t.chatPlaceholder}
+                  className="flex-1 bg-transparent border-none text-slate-700 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 text-sm py-2 px-1 resize-none focus:outline-none focus:ring-0 min-h-[36px] max-h-[80px]"
+                />
+
+                <button
+                  id="btn-submit-message"
+                  onClick={() => sendMessage()}
+                  disabled={!inputMessage.trim() && !selectedImage}
+                  className={`w-9 h-9 shrink-0 rounded-xl text-sm font-bold shadow-md flex items-center justify-center cursor-pointer transition ${
+                    inputMessage.trim() || selectedImage
+                      ? "bg-malaysia-blue dark:bg-blue-600 text-white hover:opacity-90 shadow-blue-100 dark:shadow-none"
+                      : "bg-slate-200 dark:bg-zinc-700 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                  }`}
+                >
+                  <Send size={14} className="shrink-0" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Toggle Button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="fixed bottom-20 right-4 md:bottom-8 md:right-8 w-14 h-14 bg-malaysia-blue hover:bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center z-50 transition-colors"
+      >
+        <MessageSquare size={24} />
+      </motion.button>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 animate-fade-in">
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl p-6 max-w-md w-full border border-slate-200 dark:border-zinc-700 shadow-2xl relative">
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2 font-display">
+              <Key size={18} className="text-malaysia-blue dark:text-blue-400" />
+              Gemini API Settings
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mb-4 leading-relaxed">
+              Enter your Gemini API key from Google AI Studio. The key is saved locally in your browser's localStorage and is used to call the Gemini model directly.
+            </p>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => {
+                const val = e.target.value;
+                setApiKey(val);
+                localStorage.setItem("GEMINI_API_KEY", val);
+              }}
+              placeholder="AIzaSy..."
+              className="w-full bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 p-2.5 rounded-xl text-xs font-mono text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-malaysia-blue mb-4"
+            />
+            <div className="flex justify-end gap-2 text-xs">
+              <button
+                onClick={() => {
+                  setApiKey("");
+                  localStorage.removeItem("GEMINI_API_KEY");
+                }}
+                className="px-3.5 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-bold rounded-xl transition"
+              >
+                Clear Key
+              </button>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2 bg-malaysia-blue text-white font-bold rounded-xl hover:bg-blue-700 transition"
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
