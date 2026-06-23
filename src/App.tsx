@@ -40,6 +40,7 @@ import {
   SUGGESTED_PROMPTS
 } from "./data";
 import JourneyPlanner from "./components/JourneyPlanner";
+import KLSentralMap3D from "./components/KLSentralMap3D";
 
 const LOCAL_INITIAL_TIMETABLES: Timetable[] = [
   { id: "kj-lrt-gombak", line: "Kelana Jaya LRT", color: "#EF4444", destination: "Gombak", station: "KL Sentral", minutes: 3, status: "On Time" },
@@ -258,13 +259,21 @@ Here is the essential quick-start guideline for navigating KL's public rail syst
 export default function App() {
   const [lang, setLang] = useState<Language>("en");
   const [activeTab, setActiveTab] = useState<TabId>("arrivals"); // arrivals is the default landing page.
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        return savedTheme;
+      }
+      if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+      }
+    }
+    return "light";
+  });
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [selectedMapStation, setSelectedMapStation] = useState<"kl-sentral" | "masjid-jamek">("kl-sentral");
-  const [selectedMapLevel, setSelectedMapLevel] = useState<number>(1); // default level 1
   const [selectedNetworkLine, setSelectedNetworkLine] = useState<string>("LRT 5"); // default Kelana Jaya line
   const [selectedStationCode, setSelectedStationCode] = useState<string>("KJ15"); // default KL Sentral
-  const [selectedMapNode, setSelectedMapNode] = useState<string>("lrt-gates"); // default map node
   const [inputMessage, setInputMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -275,7 +284,7 @@ export default function App() {
     }
   ]);
   const [loading, setLoading] = useState(false);
-  const [mapViewMode, setMapViewMode] = useState<"guide" | "directory">("guide");
+
 
   // Sync theme with HTML class attribute
   useEffect(() => {
@@ -285,6 +294,7 @@ export default function App() {
     } else {
       root.classList.remove("dark");
     }
+    localStorage.setItem("theme", theme);
   }, [theme]);
   
   // Real-time Timetable & Alerts State
@@ -567,6 +577,7 @@ export default function App() {
     if (stationFilter === "All") return true;
     return t.station.toLowerCase() === stationFilter.toLowerCase();
   });
+
 
   const t = UI_TRANSLATIONS[lang];
 
@@ -1541,359 +1552,17 @@ export default function App() {
               {activeTab === "maps" && (
                 <div className="space-y-4">
                   <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl leading-relaxed">
-                    {lang === "en" ? "Kuala Lumpur's terminal hubs can be confusing to navigate. Choose a station below and select either the interactive guide or the official floor directory map." :
-                     lang === "bm" ? "Stesen utama Kuala Lumpur kadangkala agak mengelirukan. Pilih stesen dan pilih sama ada panduan interaktif atau peta direktori tingkat rasmi." :
-                     lang === "zh" ? "吉隆坡交通枢纽内部路线十分繁杂。请在下方选择车站，并切换查看交互导览或官方楼层图。" :
-                     "ரயில் நிலையங்களின் வழிகாட்டிகள் மற்றும் உட்புற வரைபடங்கள் கீழே இணைக்கப்பட்டுள்ளன."}
+                    {lang === "en" ? "Explore KL Sentral's 3 levels interactively. Drag the map to pan, scroll to zoom, and click any room to learn what's inside." :
+                     lang === "bm" ? "Jelajahi 3 tingkat KL Sentral secara interaktif. Seret peta, tatal untuk zum, dan klik mana-mana bilik untuk maklumat lanjut." :
+                     lang === "zh" ? "以3D交互方式探索KL Sentral的三层结构。拖动平移，滚动缩放，点击任意区域查看详情。" :
+                     "KL Sentral-ன் 3 தளங்களை 3D வரைபடத்தில் ஆராயுங்கள். இழுக்கவும், சுவர்களை கிளிக் செய்யவும்."}
                   </p>
 
-                  {/* 5A. Station selectors */}
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => {
-                        setSelectedMapStation("kl-sentral");
-                        setSelectedMapLevel(1);
-                        setSelectedMapNode("lrt-gates");
-                      }}
-                      className={`px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
-                        selectedMapStation === "kl-sentral"
-                          ? "bg-white dark:bg-zinc-850 border-slate-350 dark:border-zinc-700 shadow-sm text-malaysia-blue dark:text-blue-400"
-                          : "bg-slate-100/75 dark:bg-zinc-900 border-transparent text-slate-500 dark:text-zinc-400"
-                      }`}
-                    >
-                      <MapPin size={14} />
-                      KL Sentral Hub 🚉
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedMapStation("masjid-jamek");
-                        setSelectedMapLevel(0);
-                        setSelectedMapNode("mj-l0-gates");
-                      }}
-                      className={`px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
-                        selectedMapStation === "masjid-jamek"
-                          ? "bg-white dark:bg-zinc-850 border-slate-350 dark:border-zinc-700 shadow-sm text-malaysia-blue dark:text-blue-400"
-                          : "bg-slate-100/75 dark:bg-zinc-900 border-transparent text-slate-500 dark:text-zinc-400"
-                      }`}
-                    >
-                      <MapPin size={14} />
-                      Masjid Jamek Interchange 🕌
-                    </button>
-                  </div>
+                  <KLSentralMap3D theme={theme} />
 
-                  {/* 5B. Map View Mode Selector (Interactive Concourse vs Official Directory) */}
-                  <div className="flex bg-slate-100 dark:bg-zinc-800 p-1 rounded-xl text-xs font-bold self-start gap-1 w-fit select-none">
-                    <button
-                      onClick={() => setMapViewMode("guide")}
-                      className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                        mapViewMode === "guide"
-                          ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-sm"
-                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-700"
-                      }`}
-                    >
-                      🗺️ Interactive Floor Guide
-                    </button>
-                    <button
-                      onClick={() => setMapViewMode("directory")}
-                      className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                        mapViewMode === "directory"
-                          ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-sm"
-                          : "text-slate-500 dark:text-zinc-400 hover:text-slate-700"
-                      }`}
-                    >
-                      📷 Official Directory Map Image
-                    </button>
-                  </div>
-
-                  {/* 5C. Floor Level selector tabs - ONLY SHOW IF INTERACTIVE GUIDE is chosen */}
-                  {mapViewMode === "guide" && (
-                    <div className="flex bg-slate-100/70 dark:bg-zinc-850 p-1 rounded-xl text-xs font-bold self-start max-w-sm">
-                      {selectedMapStation === "kl-sentral" ? (
-                        [
-                          { lvl: 2, label: "L2 (Nu Sentral Mall Link)" },
-                          { lvl: 1, label: "L1 (LRT Concourse & Gates)" },
-                          { lvl: 0, label: "L0 (Heavy Rail - Ground)" }
-                        ].map((item) => (
-                          <button
-                            key={item.lvl}
-                            onClick={() => {
-                              setSelectedMapLevel(item.lvl);
-                              if (item.lvl === 2) setSelectedMapNode("l2-nusentral-bridge");
-                              else if (item.lvl === 1) setSelectedMapNode("lrt-gates");
-                              else setSelectedMapNode("l0-ktm-gates");
-                            }}
-                            className={`flex-1 px-3 py-2 rounded-lg text-center transition cursor-pointer ${
-                              selectedMapLevel === item.lvl
-                                ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-xs"
-                                : "text-slate-500 dark:text-zinc-400 hover:text-slate-800"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))
-                      ) : (
-                        [
-                          { lvl: 1, label: "L1 (Elevated Platforms)" },
-                          { lvl: 0, label: "L0 (Street & Ticket Concourse)" },
-                          { lvl: -1, label: "L-1 (Kelana Jaya LRT Deep)" }
-                        ].map((item) => (
-                          <button
-                            key={item.lvl}
-                            onClick={() => {
-                              setSelectedMapLevel(item.lvl);
-                              if (item.lvl === 1) setSelectedMapNode("mj-l1-ampang");
-                              else if (item.lvl === 0) setSelectedMapNode("mj-l0-gates");
-                              else setSelectedMapNode("mj-l-1-kelanajaya");
-                            }}
-                            className={`flex-1 px-3 py-2 rounded-lg text-center transition cursor-pointer ${
-                              selectedMapLevel === item.lvl
-                                ? "bg-white dark:bg-zinc-700 text-malaysia-blue dark:text-blue-400 shadow-xs"
-                                : "text-slate-500 dark:text-zinc-400 hover:text-slate-800"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {/* 5D. Layout render based on Map View Mode */}
-                  {mapViewMode === "directory" ? (
-                    /* Directory Image Render */
-                    selectedMapStation === "kl-sentral" ? (
-                      <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-mono font-bold tracking-wider">KL Sentral Station Directory Map</span>
-                          <a
-                            href="https://i0.wp.com/www.klsentral.info/wp-content/uploads/2018/06/KL-Sentral-Station-Directory-Map.png?fit=1200%2C1200&ssl=1"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] text-malaysia-blue dark:text-blue-400 font-bold hover:underline"
-                          >
-                            Open High-Res ↗
-                          </a>
-                        </div>
-                        <div className="overflow-hidden rounded-xl border border-slate-100 dark:border-zinc-700 bg-slate-50 shadow-sm flex items-center justify-center p-2 max-h-[550px]">
-                          <img
-                            src="https://i0.wp.com/www.klsentral.info/wp-content/uploads/2018/06/KL-Sentral-Station-Directory-Map.png?fit=1200%2C1200&ssl=1"
-                            alt="KL Sentral Station Directory Map"
-                            className="w-full h-auto max-h-[500px] object-contain hover:scale-[1.02] transition duration-300 cursor-zoom-in rounded-lg"
-                            onClick={() => window.open("https://i0.wp.com/www.klsentral.info/wp-content/uploads/2018/06/KL-Sentral-Station-Directory-Map.png?fit=1200%2C1200&ssl=1", "_blank")}
-                          />
-                        </div>
-                        <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl leading-relaxed text-[11px] text-amber-800 dark:text-amber-300">
-                          <strong>🗺️ Level Map Guide:</strong> Ground level houses the KTM and ETS platforms, as well as the KLIA Airport Express boarding area. Escalators in the central lobby lead to Level 1, where the LRT Kelana Jaya Line gates are situated. Go up to Level 2 to cross the skywalk bridge directly into the Nu Sentral Shopping Mall to access the KL Monorail line.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-mono font-bold tracking-wider">Masjid Jamek Layout Diagram</span>
-                        <div className="p-6 bg-slate-50 dark:bg-zinc-900 border border-dashed border-slate-200 dark:border-zinc-800 rounded-xl space-y-3">
-                          <h4 className="font-bold text-slate-800 dark:text-white text-sm">Masjid Jamek Station Interchange Platform Guide:</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-center font-bold">
-                            <div className="p-3 bg-amber-550/10 border border-amber-500/20 text-amber-600 rounded-lg dark:bg-amber-500/5">
-                              <span className="block text-[10px] opacity-75">LEVEL L1</span>
-                              LRT Ampang Line Elevated Platforms
-                            </div>
-                            <div className="p-3 bg-slate-100 dark:bg-zinc-800 border border-slate-200 text-slate-700 dark:text-zinc-300 rounded-lg flex items-center justify-center">
-                              ⬇️ Concourse Stairs / Escalators ⬇️
-                            </div>
-                            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 rounded-lg dark:bg-red-500/5">
-                              <span className="block text-[10px] opacity-75">LEVEL L-1</span>
-                              LRT Kelana Jaya Underground platforms
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-650 dark:text-zinc-300 leading-relaxed pt-2">
-                            The transfer lobby connects both lines at <strong>Level 0 (Street Level)</strong>. Follow the large hanging signboards. You walk down to the underground platform for Kelana Jaya line trains (KJ), or take the escalator up to the elevated platform for Ampang/Sri Petaling line trains (AG/SP). Transfer takes about <strong>1-2 minutes</strong> and is completely inside the ticket barriers, so you do not tap out of the station.
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    /* Two-Panel Interactive Guide */
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-                      
-                      {/* Panel Left: Interactive schematics of chosen level */}
-                      <div className="md:col-span-7 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between min-h-[300px]">
-                        <div>
-                          <div className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase font-mono font-bold tracking-wider mb-2">Concourse blueprint layout</div>
-                          
-                          {/* Blueprint Container Box */}
-                          <div className="bg-dashed bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-2xl relative min-h-[260px] flex overflow-hidden">
-                            {selectedMapStation === "kl-sentral" && (
-                              <div className="flex flex-col w-full h-full">
-                                
-                                {/* Level 2 */}
-                                <div className={`p-4 border-b border-slate-200 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 2 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
-                                  <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L2</div>
-                                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {[
-                                      { id: "l2-nusentral-bridge", label: "Nu Sentral Link Bridge", detail: "Skywalk escalators linking directly inside the mall. Walk straight this way towards Monorail gates." },
-                                      { id: "l2-foodcourt", label: "Food Concourse & Retail", detail: "Over 20 eateries, bubble teas, coffee shops, and bakeries. Departure Hall for ETS." }
-                                    ].map(node => (
-                                      <button
-                                        key={node.id}
-                                        onClick={() => { setSelectedMapLevel(2); setSelectedMapNode(node.id); }}
-                                        className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
-                                          selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
-                                        }`}
-                                      >
-                                        {node.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Level 1 */}
-                                <div className={`p-4 border-b border-slate-200 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 1 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
-                                  <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L1</div>
-                                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {[
-                                      { id: "lrt-gates", label: "LRT & Main Concourse", detail: "Connecting hub. LRT Kelana Jaya gates, KTM Komuter ticketing, and ERL Ticketing." },
-                                      { id: "l1-tng-refund", label: "Ticketing & Touch 'n Go", detail: "Customer service counters, self-service kiosks, and transit police station." }
-                                    ].map(node => (
-                                      <button
-                                        key={node.id}
-                                        onClick={() => { setSelectedMapLevel(1); setSelectedMapNode(node.id); }}
-                                        className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
-                                          selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
-                                        }`}
-                                      >
-                                        {node.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Level 0 */}
-                                <div className={`p-4 flex flex-col sm:flex-row sm:items-center gap-3 transition-colors ${selectedMapLevel === 0 ? 'bg-amber-100/50 dark:bg-amber-900/10' : 'bg-white dark:bg-zinc-800'}`}>
-                                  <div className="font-black text-2xl text-slate-300 dark:text-zinc-600 w-12 text-center">L0</div>
-                                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {[
-                                      { id: "l0-ktm-gates", label: "KTM & Rail Platforms", detail: "Ground floor boarding platforms for KTM Komuter and intercity ETS trains." },
-                                      { id: "l0-erl-gates", label: "KLIA Transit & Express", detail: "Fast trains to KLIA T1 & T2. Dedicated waiting areas and baggage drop-off." }
-                                    ].map(node => (
-                                      <button
-                                        key={node.id}
-                                        onClick={() => { setSelectedMapLevel(0); setSelectedMapNode(node.id); }}
-                                        className={`p-2.5 border rounded-lg text-left text-xs cursor-pointer transition ${
-                                          selectedMapNode === node.id ? "bg-amber-100 dark:bg-amber-900/20 border-amber-400 font-bold shadow-sm ring-1 ring-amber-300" : "bg-slate-50 dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 font-medium border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
-                                        }`}
-                                      >
-                                        {node.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                              </div>
-                            )}
-
-                            {selectedMapStation === "masjid-jamek" && (
-                              <div className="grid grid-cols-2 gap-3 w-full p-5">
-                              {/* MASJID JAMEK FLOWS */}
-                              {selectedMapLevel === 1 && [
-                                { id: "mj-l1-ampang", label: "Ampang elevated platform", detail: "Spans towards Sentul East or Ampang/Putra Heights. Open-air format. Elevators are accessible." }
-                              ].map(node => (
-                                <button
-                                  key={node.id}
-                                  onClick={() => setSelectedMapNode(node.id)}
-                                  className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
-                                    selectedMapNode === node.id
-                                      ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
-                                      : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 font-bold"
-                                  }`}
-                                >
-                                  {node.label}
-                                </button>
-                              ))}
-
-                              {selectedMapStation === "masjid-jamek" && selectedMapLevel === 0 && [
-                                { id: "mj-l0-gates", label: "Main Unified Ticket Gates", detail: "Universal barrier gates. Seamless walk-through to transfer from LRT Ampang to LRT Kelana Jaya." },
-                                { id: "mj-l0-street", label: "Street Level historic exits", detail: "Leads straight to the scenic Jamek Mosque, Colonial arches district, and traditional market bazaar." }
-                              ].map(node => (
-                                <button
-                                  key={node.id}
-                                  onClick={() => setSelectedMapNode(node.id)}
-                                  className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
-                                    selectedMapNode === node.id
-                                      ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
-                                      : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-650 dark:text-zinc-300 font-bold"
-                                  }`}
-                                >
-                                  {node.label}
-                                </button>
-                              ))}
-
-                              {selectedMapStation === "masjid-jamek" && selectedMapLevel === -1 && [
-                                { id: "mj-l-1-kelanajaya", label: "Kelana Jaya underground platform", detail: "Subterranean heavy rails towards KLCC / Gombak, or south to KL Sentral. Fully air-conditioned block with shield gates." }
-                              ].map(node => (
-                                <button
-                                  key={node.id}
-                                  onClick={() => setSelectedMapNode(node.id)}
-                                  className={`p-4 border rounded-xl text-left cursor-pointer transition duration-200 ${
-                                    selectedMapNode === node.id
-                                      ? "bg-amber-100/90 dark:bg-amber-900/20 border-amber-400 text-slate-800 dark:text-white font-extrabold shadow-sm ring-2 ring-amber-300"
-                                      : "bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 font-bold"
-                                  }`}
-                                >
-                                  {node.label}
-                                </button>
-                              ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Panel Right: Explanation box */}
-                      <div className="md:col-span-5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-                            <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm uppercase tracking-wider">
-                              Location Guidelines
-                            </h4>
-                          </div>
-
-                          {(() => {
-                            const nodesList = [
-                              { id: "l2-nusentral-bridge", name: "Nu Sentral Link Bridge", desc: "A modern covered escalator bridge. Allows direct walk-through into Nu Sentral retail complex level 1. Safe from rainfall and traffic noise." },
-                              { id: "l2-foodcourt", name: "Nu Sentral Food Concourse", desc: "Located at Level 2/3 of Nu Sentral. Houses a diverse selection of cheap local noodle spots, fast food, tea counters, and bakery shops." },
-                              { id: "l2-elevators", name: "Main Core Elevator Towers", desc: "Vertical high-capacity smart elevators, linking Level 2 directly downwards to primary transit gates and suburban train halls." },
-                              { id: "lrt-gates", name: "LRT Kelana Jaya Turnstiles", desc: "LRT terminal entryways. Tapping physical Touch 'n Go card or blue tokens opens gates. Make sure to tap at the red glowing arrow paths." },
-                              { id: "lrt-office", name: "RapidKL Customer Counter", desc: "Staffed cashier and helper booth right before the turnstile row. Purchase fresh Touch 'n Go magnetic cards, top-up balances, or request student discount registrations." },
-                              { id: "l1-tng-refund", name: "TnG Self-Service Kiosks", desc: "Digital vending box. Insert banking cards or mobile cards to refill TnG balances. Standard processing incorporates 0% service fees." },
-                              { id: "l1-tvm-kiosks", name: "Ticket Vending Machines (TVM)", desc: "Row of large screens. Select destinations to buy single journey physical reddish coin tokens. Accept RM1, RM5 notes and coins." },
-                              { id: "l0-ktm-gates", name: "KTM Heavy Rail Gates", desc: "Ticket turnstiles positioned at Level 0 concourse towards commuter suburban carriages. Highly distinct from LRT lines." },
-                              { id: "l0-erl-gates", name: "KLIA Airport Express Gates", desc: "Direct ticket gate area leading to non-stop airport rail platform. Requires separate premium tickets or online booking vounchers." },
-                              { id: "l0-baggage", name: "Baggage Storage Counter", desc: "A physical counter offering secure temporary storage for luggage. Highly accessible for tourists having late departures." },
-                              { id: "mj-l1-ampang", name: "Ampang elevated platform", desc: "Located elevated on Level 1. Direct cross-platform links to travel north or south. Hot and breezy." },
-                              { id: "mj-l0-gates", name: "Main Unified Ticket Gates", desc: "Integrated gate lobby at Masjid Jamek ground level. Completely unified, enabling smooth LRT swaps." },
-                              { id: "mj-l0-street", name: "Street Level historic exits", desc: "Exiting gates brings you straight in front of Masjid Jamek mosque structures, adjacent markets, and old heritage buildings." },
-                              { id: "mj-l-1-kelanajaya", name: "Kelana Jaya underground platform", desc: "Fully underground, air-conditioned subway platform with glass platform shield doors. Direct trains to KLCC and KL Sentral." }
-                            ];
-                            const activeNode = nodesList.find(n => n.id === selectedMapNode) || nodesList[3];
-                            return (
-                              <div className="space-y-3 mt-1.5 text-xs animate-fade-in">
-                                <h5 className="font-extrabold text-[13px] text-slate-800 dark:text-white">{activeNode.name}</h5>
-                                <p className="text-slate-650 dark:text-zinc-300 leading-relaxed text-[11px] bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-850 p-3 rounded-xl">
-                                  {activeNode.desc}
-                                </p>
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="mt-4 p-2 bg-amber-50/75 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/40 rounded-xl leading-normal text-[10.5px] text-amber-800 dark:text-amber-350 shrink-0">
-                          📌 Navigation Tip: Spot the large hanging signs overhead inside stations. Blue labels point towards LRT, Green towards MRT, Yellow towards Monorail, and Orange towards KTM Komuter.
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
+
 
           </div>
         </div>

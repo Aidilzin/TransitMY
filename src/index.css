@@ -11,6 +11,14 @@
   --color-malaysia-red: #CC0001;
 }
 
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #f8fafc;
@@ -20,6 +28,46 @@ body {
 .dark body {
   background-color: #121212;
   color: #e2e8f0;
+}
+
+/* Style definitions for SVG mall directory blueprints */
+.map-blueprint-grid {
+  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.dark .map-blueprint-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.map-svg-room {
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.map-svg-room:hover {
+  filter: brightness(0.95);
+  stroke-width: 1.5;
+}
+
+.dark .map-svg-room:hover {
+  filter: brightness(1.1);
+}
+
+@keyframes map-svg-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+}
+
+.map-svg-pulse-active {
+  animation: map-svg-pulse 2s infinite ease-in-out;
+  transform-origin: center;
 }
 
 /* Custom scrollbars for pristine desktop UI */

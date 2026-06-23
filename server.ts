@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // High limit for base64 image uploads
 app.use(express.json({ limit: "15mb" }));
@@ -315,6 +315,131 @@ app.get("/api/timetable", (req, res) => {
     timetables: INITIAL_TIMETABLES,
     announcements: GENERAL_ANNOUNCEMENTS
   });
+});
+
+// Dynamic Moovit-Style Simulated Telemetry engine
+interface LiveTrain {
+  id: string;
+  direction: "southbound" | "northbound";
+  currentStationCode: string;
+  nextStationCode: string;
+  progress: number;
+}
+
+interface StationETA {
+  southbound: number | null;
+  northbound: number | null;
+}
+
+function getLiveTracking(lineCode: string) {
+  const lineStations: Record<string, string[]> = {
+    "LRT 5": ["KJ1", "KJ2", "KJ3", "KJ4", "KJ5", "KJ6", "KJ7", "KJ8", "KJ9", "KJ10", "KJ11", "KJ12", "KJ13", "KJ14", "KJ15", "KJ16", "KJ17", "KJ18", "KJ19", "KJ20", "KJ21", "KJ22", "KJ23", "KJ24", "KJ25", "KJ26", "KJ27", "KJ28", "KJ29", "KJ30", "KJ31", "KJ32", "KJ33", "KJ34", "KJ35", "KJ36", "KJ37"],
+    "MRT 9": ["KG04", "KG05", "KG06", "KG07", "KG08", "KG09", "KG10", "KG12", "KG13", "KG14", "KG15", "KG16", "KG17", "KG18A", "KG20", "KG21", "KG22", "KG23", "KG24", "KG25", "KG26", "KG27", "KG28", "KG29", "KG30", "KG31", "KG32", "KG33", "KG34", "KG35"],
+    "MRT 12": ["PY01", "PY02", "PY03", "PY04", "PY05", "PY06", "PY07", "PY08", "PY09", "PY10", "PY11", "PY12", "PY13", "PY14", "PY15", "PY16", "PY17", "PY18", "PY19", "PY20", "PY21", "PY22", "PY23", "PY24", "PY25", "PY26", "PY27", "PY28", "PY29", "PY30", "PY31", "PY32", "PY33", "PY34", "PY35", "PY36"],
+    "Monorail 8": ["MR1", "MR2", "MR3", "MR4", "MR5", "MR6", "MR7", "MR8", "MR9", "MR10", "MR11"],
+    "KTM 1": ["KC05", "KC04", "KC03", "KC02", "KC01", "KA04", "KA03", "KA02", "KA01", "KB01", "KB02", "KB03", "KB04", "KB05", "KB06", "KB07", "KB08", "KB09", "KB10", "KB11", "KB12", "KB13", "KB14", "KB15", "KB16", "KB17"],
+    "ERL 6": ["KE1", "KE2", "KE3", "KE4", "KE5", "KE6"]
+  };
+
+  const stations = lineStations[lineCode] || lineStations["LRT 5"];
+  const N = stations.length;
+  
+  // Cycle time per station: 95 seconds travel + 25 seconds dwell = 120 seconds
+  const stationCycle = 120;
+  const roundTripCycles = 2 * N;
+  
+  // Spacing: one train every 5 stations
+  const spacingCycles = 5;
+  const maxTrains = Math.ceil(roundTripCycles / spacingCycles);
+  
+  const epoch = Math.floor(Date.now() / 1000);
+  
+  const trains: LiveTrain[] = [];
+  
+  for (let i = 0; i < maxTrains; i++) {
+    const rawProgress = (epoch / stationCycle + i * spacingCycles) % roundTripCycles;
+    
+    let direction: "southbound" | "northbound" = "southbound";
+    let currentIdx = 0;
+    let nextIdx = 0;
+    let progressInLeg = 0;
+    
+    if (rawProgress < N) {
+      direction = "southbound";
+      currentIdx = Math.floor(rawProgress);
+      nextIdx = Math.min(currentIdx + 1, N - 1);
+      progressInLeg = rawProgress - currentIdx;
+    } else {
+      direction = "northbound";
+      const northProgress = rawProgress - N;
+      currentIdx = (N - 1) - Math.floor(northProgress);
+      nextIdx = Math.max(currentIdx - 1, 0);
+      progressInLeg = northProgress - Math.floor(northProgress);
+    }
+    
+    trains.push({
+      id: `t-${lineCode}-${i}`,
+      direction,
+      currentStationCode: stations[currentIdx],
+      nextStationCode: stations[nextIdx],
+      progress: progressInLeg
+    });
+  }
+
+  const etas: Record<string, StationETA> = {};
+  stations.forEach((code) => {
+    etas[code] = { southbound: null, northbound: null };
+  });
+
+  stations.forEach((stationCode, idx) => {
+    // 1. Southbound ETA
+    let minSouthboundEta: number | null = null;
+    trains.forEach((t) => {
+      if (t.direction === "southbound") {
+        const tIdx = stations.indexOf(t.currentStationCode);
+        if (tIdx <= idx) {
+          const dist = idx - (tIdx + t.progress);
+          const eta = Math.round(dist * stationCycle);
+          if (eta >= 0) {
+            if (minSouthboundEta === null || eta < minSouthboundEta) {
+              minSouthboundEta = eta;
+            }
+          }
+        }
+      }
+    });
+    etas[stationCode].southbound = minSouthboundEta;
+
+    // 2. Northbound ETA
+    let minNorthboundEta: number | null = null;
+    trains.forEach((t) => {
+      if (t.direction === "northbound") {
+        const tIdx = stations.indexOf(t.currentStationCode);
+        if (tIdx >= idx) {
+          const dist = (tIdx - t.progress) - idx;
+          const eta = Math.round(dist * stationCycle);
+          if (eta >= 0) {
+            if (minNorthboundEta === null || eta < minNorthboundEta) {
+              minNorthboundEta = eta;
+            }
+          }
+        }
+      }
+    });
+    etas[stationCode].northbound = minNorthboundEta;
+  });
+
+  return {
+    lineCode,
+    trains,
+    etas
+  };
+}
+
+app.get("/api/live-tracking", (req, res) => {
+  const line = (req.query.line as string) || "LRT 5";
+  const trackingData = getLiveTracking(line);
+  res.json(trackingData);
 });
 
 // Vite middleware setup for Development or Static assets for Production
