@@ -22,6 +22,13 @@ export const UI_TRANSLATIONS: Record<Language, {
   disclaimer: string;
   realtimeAlertTitle: string;
   mapsTitle: string;
+  arrivalsTab: string;
+  plannerTab: string;
+  routesTab: string;
+  passesTab: string;
+  mapsTab: string;
+  faresTab: string;
+  tipsTab: string;
 }> = {
   en: {
     tagline: "Your Malaysia Transit Companion",
@@ -44,7 +51,14 @@ export const UI_TRANSLATIONS: Record<Language, {
     allStations: "All Interchange Hubs",
     disclaimer: "Real-time updates provided by RapidKL & KTMB telemetry protocols.",
     realtimeAlertTitle: "Network Alert Banner",
-    mapsTitle: "Station Hub Layouts"
+    mapsTitle: "Station Hub Layouts",
+    arrivalsTab: "Arrivals",
+    plannerTab: "Planner",
+    routesTab: "Routes",
+    passesTab: "Passes",
+    mapsTab: "Maps",
+    faresTab: "Fares",
+    tipsTab: "Tips"
   },
   bm: {
     tagline: "Teman Transit Malaysia Anda",
@@ -67,7 +81,14 @@ export const UI_TRANSLATIONS: Record<Language, {
     allStations: "Semua Hub Pertukaran",
     disclaimer: "Kemas kini masa nyata disediakan oleh protokol telemetri RapidKL & KTMB.",
     realtimeAlertTitle: "Pemberitahuan Segera Laluan",
-    mapsTitle: "Pelan Stesen Hub"
+    mapsTitle: "Pelan Stesen Hub",
+    arrivalsTab: "Ketibaan",
+    plannerTab: "Perancang",
+    routesTab: "Laluan",
+    passesTab: "Pas",
+    mapsTab: "Peta",
+    faresTab: "Tambang",
+    tipsTab: "Syor"
   },
   zh: {
     tagline: "您的马来西亚出行小助手",
@@ -90,7 +111,14 @@ export const UI_TRANSLATIONS: Record<Language, {
     allStations: "所有换乘站",
     disclaimer: "实时更新数据由 RapidKL & KTMB 电信数据传输生成。",
     realtimeAlertTitle: "交通网突发通告",
-    mapsTitle: "换乘枢纽层级图"
+    mapsTitle: "换乘枢纽层级图",
+    arrivalsTab: "到站",
+    plannerTab: "规划",
+    routesTab: "路线",
+    passesTab: "票卡",
+    mapsTab: "地图",
+    faresTab: "票价",
+    tipsTab: "锦囊"
   },
   ta: {
     tagline: "மலேசியாவின் போக்குவரத்து வழிகாட்டி",
@@ -113,7 +141,14 @@ export const UI_TRANSLATIONS: Record<Language, {
     allStations: "அனைத்து பரிமாற்ற நிலையங்கள்",
     disclaimer: "RapidKL & KTMB டெலிமெட்ரி நெறிமுறைகளால் வழங்கப்பட்ட நிகழ்நேர புதுப்பிப்புகள்.",
     realtimeAlertTitle: "நெட்வொர்க் எச்சரிக்கை பேனர்",
-    mapsTitle: "பெரிய ரயில் நிலைய வரைபடங்கள்"
+    mapsTitle: "பெரிய ரயில் நிலைய வரைபடங்கள்",
+    arrivalsTab: "வருகை",
+    plannerTab: "திட்டம்",
+    routesTab: "வழிகள்",
+    passesTab: "பாஸ்",
+    mapsTab: "வரைபடம்",
+    faresTab: "கட்டணம்",
+    tipsTab: "குறிப்பு"
   }
 };
 

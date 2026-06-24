@@ -280,12 +280,12 @@ export interface RouteResult {
 }
 
 /**
- * Calculates a route from a source key station to a destination key station using BFS path finding on our graph.
+ * Calculates a route from a source key station to a destination key station using Dijkstra's algorithm on our transit graph.
  */
 export function calculateRoute(startId: string, endId: string): RouteResult | null {
   if (startId === endId) return null;
 
-  // Build adjacent list map dynamically (bidirectional search routing helper)
+  // Build adjacent list map dynamically
   const graph: Record<string, { to: string; link: RouteLink }[]> = {};
   
   PLANNER_STATIONS.forEach(st => {
@@ -293,7 +293,6 @@ export function calculateRoute(startId: string, endId: string): RouteResult | nu
   });
 
   NETWORK_LINKS.forEach(link => {
-    // Add bidirectional paths
     if (graph[link.fromId]) {
       graph[link.fromId].push({ to: link.toId, link });
     }
@@ -302,107 +301,154 @@ export function calculateRoute(startId: string, endId: string): RouteResult | nu
     }
   });
 
-  // Breadth-first search for Shortest path on graph
-  const queue: { currentId: string; p: PathStep[] }[] = [{ currentId: startId, p: [] }];
-  const visited = new Set<string>([startId]);
-  let shortestPathSteps: PathStep[] | null = null;
+  const getLinesForStation = (stationId: string): string[] => {
+    const linesSet = new Set<string>();
+    const neighbors = graph[stationId] || [];
+    neighbors.forEach(edge => {
+      linesSet.add(edge.link.lineCode);
+    });
+    return Array.from(linesSet);
+  };
+
+  interface DijkstraState {
+    stationId: string;
+    lineCode: string;
+    path: PathStep[];
+    totalStops: number;
+    transfersCount: number;
+    totalTime: number;
+  }
+
+  const startLines = getLinesForStation(startId);
+  const queue: DijkstraState[] = [];
+  const minTime: Record<string, number> = {};
+
+  startLines.forEach(line => {
+    const key = `${startId}::${line}`;
+    queue.push({
+      stationId: startId,
+      lineCode: line,
+      path: [],
+      totalStops: 0,
+      transfersCount: 0,
+      totalTime: 0
+    });
+    minTime[key] = 0;
+  });
+
+  let bestResult: DijkstraState | null = null;
 
   while (queue.length > 0) {
-    const { currentId, p } = queue.shift()!;
+    // Sort queue by totalTime ascending to pop the minimum time state
+    queue.sort((a, b) => a.totalTime - b.totalTime);
+    const curr = queue.shift()!;
 
-    if (currentId === endId) {
-      if (!shortestPathSteps || p.length < shortestPathSteps.length) {
-        shortestPathSteps = p;
-      }
+    const key = `${curr.stationId}::${curr.lineCode}`;
+    if (curr.totalTime > (minTime[key] ?? Infinity)) {
       continue;
     }
 
-    const neighbors = graph[currentId] || [];
-    for (const edge of neighbors) {
-      if (!visited.has(edge.to)) {
-        visited.add(edge.to);
-        const step: PathStep = {
-          stationId: edge.to,
-          lineCode: edge.link.lineCode,
-          lineColor: edge.link.color,
-          stopsTraversed: edge.link.stops
-        };
+    if (curr.stationId === endId) {
+      bestResult = curr;
+      break;
+    }
+
+    // 1. Move along the same line
+    const neighbors = graph[curr.stationId] || [];
+    neighbors.forEach(edge => {
+      if (edge.link.lineCode === curr.lineCode) {
+        const nextTime = curr.totalTime + (edge.link.stops * 3.2);
+        const nextKey = `${edge.to}::${curr.lineCode}`;
+        if (nextTime < (minTime[nextKey] ?? Infinity)) {
+          minTime[nextKey] = nextTime;
+          queue.push({
+            stationId: edge.to,
+            lineCode: curr.lineCode,
+            path: [
+              ...curr.path,
+              {
+                stationId: edge.to,
+                lineCode: curr.lineCode,
+                lineColor: edge.link.color,
+                stopsTraversed: edge.link.stops
+              }
+            ],
+            totalStops: curr.totalStops + edge.link.stops,
+            transfersCount: curr.transfersCount,
+            totalTime: nextTime
+          });
+        }
+      }
+    });
+
+    // 2. Transfer to another line at the same station
+    const otherLines = getLinesForStation(curr.stationId).filter(l => l !== curr.lineCode);
+    otherLines.forEach(otherLine => {
+      const nextTime = curr.totalTime + 6.0; // transfer penalty
+      const nextKey = `${curr.stationId}::${otherLine}`;
+      if (nextTime < (minTime[nextKey] ?? Infinity)) {
+        minTime[nextKey] = nextTime;
         queue.push({
-          currentId: edge.to,
-          p: [...p, step]
+          stationId: curr.stationId,
+          lineCode: otherLine,
+          path: curr.path,
+          totalStops: curr.totalStops,
+          transfersCount: curr.transfersCount + 1,
+          totalTime: nextTime
         });
       }
-    }
+    });
   }
 
-  if (!shortestPathSteps) {
-    // Fallback direct connector for airport lines if BFS has edge discrepancies
-    if (startId === "kl-sentral" && endId === "klia-t1") {
-      shortestPathSteps = [{ stationId: "klia-t1", lineCode: "ERL 6/7", lineColor: "#A855F7", stopsTraversed: 1 }];
-    } else {
-      return null;
-    }
+  if (!bestResult) {
+    return null;
   }
 
-  // Calculate stats
-  let totalStops = 0;
-  let transfersCount = -1;
-  let lastLineCode = "";
+  // Calculate special flags based on the path
   let isKtmSpecial = false;
   let isAirportSpecial = false;
   let isMonorailSpecial = false;
 
-  shortestPathSteps.forEach(step => {
-    totalStops += step.stopsTraversed;
-    if (step.lineCode !== lastLineCode) {
-      transfersCount++;
-      lastLineCode = step.lineCode;
-    }
+  bestResult.path.forEach(step => {
     if (step.lineCode === "KTM 1") isKtmSpecial = true;
     if (step.lineCode === "ERL 6/7") isAirportSpecial = true;
     if (step.lineCode === "MRL 8") isMonorailSpecial = true;
   });
 
-  // Basic Fare calculation structure
+  // Calculate fares
   let cashFareValue = 0;
   let tngFareValue = 0;
 
   if (isAirportSpecial) {
-    // ERL is premium fare
     const hasSentral = startId === "kl-sentral" || endId === "kl-sentral";
     const hasAirport = startId === "klia-t1" || endId === "klia-t1";
 
     if (hasSentral && hasAirport) {
       cashFareValue = 55.00;
-      tngFareValue = 49.50; // Discounted TnG
+      tngFareValue = 49.50;
     } else if (hasAirport) {
-      cashFareValue = 35.0; // Putrajaya to airport
-      tngFareValue = 31.5;
+      cashFareValue = 35.00;
+      tngFareValue = 31.50;
     } else {
-      cashFareValue = 14.0; // Sentral to Putrajaya ERL
+      cashFareValue = 14.00;
       tngFareValue = 12.60;
     }
   } else {
-    // Standard rail calculation
     const baseFare = isKtmSpecial ? 2.20 : isMonorailSpecial ? 1.60 : 1.20;
     const ratePerStop = isMonorailSpecial ? 0.30 : 0.15;
-    
-    cashFareValue = baseFare + (totalStops * ratePerStop);
-    tngFareValue = cashFareValue * 0.90; // 10% Touch n Go savings
+    cashFareValue = baseFare + (bestResult.totalStops * ratePerStop);
+    tngFareValue = cashFareValue * 0.90;
   }
-
-  // Estimate total minutes
-  const totalTimeMinutes = (totalStops * 3.2) + (Math.max(0, transfersCount) * 6);
 
   return {
     startId,
     endId,
-    path: shortestPathSteps,
-    totalStops,
-    totalTimeMinutes: Math.round(totalTimeMinutes),
+    path: bestResult.path,
+    totalStops: bestResult.totalStops,
+    totalTimeMinutes: Math.round(bestResult.totalTime),
     cashFareValue: parseFloat(cashFareValue.toFixed(2)),
     tngFareValue: parseFloat(tngFareValue.toFixed(2)),
-    transfersCount: Math.max(0, transfersCount),
+    transfersCount: bestResult.transfersCount,
     isKtmSpecial,
     isAirportSpecial,
     isMonorailSpecial

@@ -92,7 +92,7 @@ export default function JourneyPlanner({ lang }: JourneyPlannerProps) {
       subheader: "即时计算吉隆坡最佳旅游换乘路线、站数里程、预计时间，并为您对比单程纸币购票与 Touch 'n Go 交通卡扣款金额差异。",
       from: "请选择出发车站",
       to: "请选择目的车站",
-      swap: "互换起止 stesen",
+      swap: "互换起点与终点",
       popular: "吉隆坡经典观光捷径 (点击即刻查询)",
       duration: "预计时间",
       min: "分钟",
@@ -330,13 +330,6 @@ export default function JourneyPlanner({ lang }: JourneyPlannerProps) {
                       <div className="absolute left-[8px] top-6 bottom-0 w-[4px] bg-slate-200 dark:bg-zinc-700"></div>
                     )}
 
-                    {/* Line connection banner decoration */}
-                    <div className="absolute -left-16 top-1 text-[9px] font-mono font-bold tracking-wider uppercase text-slate-400 dark:text-zinc-500 text-right w-20 pr-4 mt-1 hidden sm:block">
-                      <span className="px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: step.lineColor }}>
-                        {step.lineCode}
-                      </span>
-                    </div>
-
                     {/* Step node dot indicator */}
                     <button
                       onClick={() => handleHopClick(step.stationId)}
@@ -362,23 +355,23 @@ export default function JourneyPlanner({ lang }: JourneyPlannerProps) {
                         </div>
                       )}
 
-                      <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-1.5">
-                        {hopStation?.name[lang]} {hopStation?.emoji}
+                      <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm flex flex-wrap items-center gap-1.5">
+                        <span className="inline-block text-[9px] font-mono font-bold uppercase text-white px-1.5 py-0.5 rounded shadow-sm shrink-0" style={{ backgroundColor: step.lineColor }}>
+                          {step.lineCode}
+                        </span>
+                        <span>{hopStation?.name[lang]} {hopStation?.emoji}</span>
                         {isTarget ? (
-                          <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-450">
+                          <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-450 shrink-0">
                             DESTINATION
                           </span>
                         ) : (
-                          <span className="font-mono text-[9.5px] text-slate-400 font-bold">
+                          <span className="font-mono text-[9.5px] text-slate-400 font-bold shrink-0">
                             (+{step.stopsTraversed} {step.stopsTraversed > 1 ? "stops" : "stop"})
                           </span>
                         )}
                       </h5>
-                      <span className="sm:hidden inline-block text-[9px] font-mono font-bold uppercase text-white px-1 ml-0.5 mt-0.5 rounded" style={{ backgroundColor: step.lineColor }}>
-                        {step.lineCode}
-                      </span>
                       {!isTarget && (
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[10px] text-slate-400 mt-1 pl-[1px]">
                           {hopStation?.lines.join(" • ")}
                         </p>
                       )}

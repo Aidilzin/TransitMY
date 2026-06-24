@@ -57,6 +57,44 @@ const LOCAL_GENERAL_ANNOUNCEMENTS: Announcement[] = [
   { id: 2, text: "🎫 Save queueing time: Tourists can purchase the 'MyCity 3-Day Pass' for unlimited rides on LRT, MRT, and Monorail for RM25!", type: "info" }
 ];
 
+const travelCategories: Record<Language, { text: string; desc: string }[]> = {
+  en: [
+    { text: "LRT / MRT lines", desc: "Urban Heavy Rail" },
+    { text: "Monorail Line", desc: "Central Elevated" },
+    { text: "KTM Railways", desc: "Suburban Regional" },
+    { text: "Airport Rails", desc: "Direct Gateway Link" },
+    { text: "BRT Sunway", desc: "Electric Elevated Bus" }
+  ],
+  bm: [
+    { text: "Aliran LRT / MRT", desc: "Laluan Berat Bandar" },
+    { text: "Aliran Monorel", desc: "Tinggi Berpusat" },
+    { text: "Kereta Api KTM", desc: "Serantau Pinggir Bandar" },
+    { text: "Laluan Lapangan Terbang", desc: "Hub Pintu Masuk Terus" },
+    { text: "BRT Sunway", desc: "Bas Elektrik Tinggi" }
+  ],
+  zh: [
+    { text: "LRT / MRT 轻铁捷运", desc: "城市重轨" },
+    { text: "单轨火车", desc: "市中心高架" },
+    { text: "KTM 铁路", desc: "郊区区域铁路" },
+    { text: "机场快铁", desc: "直达门户通道" },
+    { text: "BRT 双威快捷巴士", desc: "高架电动巴士" }
+  ],
+  ta: [
+    { text: "LRT / MRT சேவைகள்", desc: "நகர கனரக ரயில்" },
+    { text: "மோனோரயில்", desc: "மத்திய உயர்த்தப்பட்ட ரயில்" },
+    { text: "கேடிஎம் ரயில்வே", desc: "புறநகர் பிராந்திய ரயில்" },
+    { text: "விமான ரயில்வே", desc: "நேரடி நுழைவாயில் இணைப்பு" },
+    { text: "பிஆர்டி சன்வே", desc: "மின்சார உயர்த்தப்பட்ட பஸ்" }
+  ]
+};
+
+const tipLabels: Record<Language, { know: string; advice: string }> = {
+  en: { know: "💡 What you should know:", advice: "⭐ Guest Advice Guideline:" },
+  bm: { know: "💡 Apa yang anda perlu tahu:", advice: "⭐ Garis Panduan Syor Tetamu:" },
+  zh: { know: "💡 乘车须知：", advice: "⭐ 观光贴士：" },
+  ta: { know: "💡 நீங்கள் அறிய வேண்டியவை:", advice: "⭐ பயணிக்கான வழிகாட்டுதல்:" }
+};
+
 const SYSTEM_INSTRUCTION = `You are TransitMY, a friendly and knowledgeable Malaysia public transit assistant. You help tourists, expats, and first-time riders navigate Malaysia's complex public transport network confidently.
 
 You have expert knowledge of:
@@ -648,6 +686,58 @@ export default function App() {
         </div>
       )}
 
+      {/* ── ROLLING INFO TICKER (peak hours + tourist advisories) ── */}
+      {(() => {
+        const peakMessages: Record<Language, string[]> = {
+          en: [
+            "⏰ PEAK HOURS: Mon–Fri 7:30–9:00am & 5:30–7:30pm — expect packed trains. Board at rear/middle cars for more space.",
+            "🎫 TOURIST TIP: Buy a Touch 'n Go card at any major station — skip token queues and get discounted fares.",
+            "🚇 TRANSFER TIP: At interchange stations (Masjid Jamek, Pasar Seni), do NOT tap out — walk directly between lines.",
+            "🍔 NO EATING: RM500 fine for food/drinks inside trains or paid concourse areas. Finish snacks before the gate.",
+            "👩 PINK COACHES: MRT & LRT have dedicated Women-Only coaches marked with pink flower stickers. Men are not permitted.",
+            "🧳 AIRPORT: KLIA Ekspres from KL Sentral reaches KLIA in 28 mins. Buy online for 10% discount.",
+          ],
+          bm: [
+            "⏰ WAKTU PUNCAK: Isnin–Jumaat 7:30–9:00pg & 5:30–7:30ptg — tren amat sesak. Naik di gerabak belakang/tengah.",
+            "🎫 PELANCONG: Beli kad Touch 'n Go di stesen utama — elak beratur panjang dan nikmati tambang diskaun.",
+            "🚇 PERTUKARAN: Di stesen pertukaran (Masjid Jamek, Pasar Seni), JANGAN tap keluar — jalan terus tukar laluan.",
+            "🍔 DILARANG MAKAN: Denda RM500 untuk makan/minum di dalam tren atau kawasan prabayar.",
+          ],
+          zh: [
+            "⏰ 高峰时段：周一至五上午7:30–9:00及傍晚5:30–7:30 — 列车极为拥挤。请尽量乘坐后节或中节车厢。",
+            "🎫 游客贴士：在主要车站购买 Touch 'n Go 卡，免去排队买票，享受优惠票价。",
+            "🚇 换乘提示：在换乘站（占美清真寺、中央艺术坊）换乘时切勿刷卡出闸，直接步行换乘即可。",
+            "🍔 禁止饮食：在列车内或付费区内吃喝将被罚款 RM500。请在出闸前用完食物。",
+          ],
+          ta: [
+            "⏰ பருவ நேரம்: திங்கள்–வெள்ளி 7:30–9:00 மு.ப & 5:30–7:30 மா.ப — ரயில்கள் மிகவும் நிரம்பியிருக்கும்.",
+            "🎫 சுற்றுலா குறிப்பு: Touch 'n Go கார்டை வாங்கி வரிசையில் காத்திருக்காமல் பயணிக்கலாம்.",
+            "🚇 பரிமாற்றம்: மஸ்ஜித் ஜமெக், பாசார் செனி நிலையங்களில் கார்டை டாப் அவுட் செய்யாமல் நேரடியாக நடந்து செல்லுங்கள்.",
+          ],
+        };
+        const msgs = [...(announcements.map(a => a.text)), ...(peakMessages[lang] || peakMessages.en)];
+        return (
+          <div className="bg-slate-800 dark:bg-zinc-950 text-white overflow-hidden h-7 flex items-center shrink-0 border-b border-slate-700 dark:border-zinc-800">
+            <div className="shrink-0 bg-malaysia-red text-white text-[10px] font-bold px-2.5 h-full flex items-center gap-1 z-10">
+              <AlertTriangle size={10} />
+              <span>LIVE</span>
+            </div>
+            <div className="flex-1 overflow-hidden relative">
+              <div
+                className="flex whitespace-nowrap"
+                style={{
+                  animation: "ticker-scroll 60s linear infinite",
+                }}
+              >
+                {[...msgs, ...msgs].map((msg, i) => (
+                  <span key={i} className="text-[11px] text-slate-200 px-8 shrink-0">{msg}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* MAIN APPLICATION STAGE (BENTO ROW LAYOUT FOR MULTI-COLUMN DESIGN) */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 w-full max-w-7xl mx-auto p-3 sm:p-4 gap-4 overflow-hidden relative">
         
@@ -685,20 +775,20 @@ export default function App() {
           )}
 
           {/* Top Panel Tab Bar (Docked Tab bar inside center column) */}
-          <div className="hidden md:flex bg-slate-100 dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 p-2 overflow-x-auto shrink-0 gap-1.5 scrollbar-thin select-none">
+          <div className="hidden md:flex bg-slate-100 dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 p-2 overflow-x-auto shrink-0 gap-1 scrollbar-none select-none">
             {[
-              { id: "arrivals", label: "Live Arrivals", icon: <Clock size={14} /> },
-              { id: "planner", label: lang === "en" ? "Route Planner" : lang === "bm" ? "Perancang" : lang === "zh" ? "线路与票价" : lang === "ta" ? "பாதை" : "Route Planner", icon: <Compass size={14} /> },
-              { id: "network", label: lang === "en" ? "Live Routes" : lang === "bm" ? "Stesen" : lang === "zh" ? "站点顺序" : lang === "ta" ? "நிலையங்கள்" : "Live Routes", icon: <Network size={14} /> },
-              { id: "ticketing", label: lang === "en" ? "Pass & Card" : lang === "bm" ? "Tiket & Pas" : lang === "zh" ? "购票指南" : lang === "ta" ? "டிக்கெட்டுகள்" : "Pass & Card", icon: <Ticket size={14} /> },
-              { id: "maps", label: lang === "en" ? "Station Maps" : lang === "bm" ? "Peta Hub" : lang === "zh" ? "枢纽层级" : lang === "ta" ? "வரைபடங்கள்" : "Station Maps", icon: <Map size={14} /> },
-              { id: "fares", label: lang === "en" ? "Fares Matrix" : lang === "bm" ? "Kadar Tambang" : lang === "zh" ? "兼容矩阵" : lang === "ta" ? "கட்டணங்கள்" : "Fares Matrix", icon: <TrendingUp size={14} /> },
-              { id: "tips", label: lang === "en" ? "Commuter Tips" : lang === "bm" ? "Syor Pintar" : lang === "zh" ? "避坑指南" : lang === "ta" ? "ஆலோசனைகள்" : "Commuter Tips", icon: <AlertCircle size={14} /> }
+              { id: "arrivals", label: t.arrivalsTab, icon: <Clock size={14} /> },
+              { id: "planner", label: t.plannerTab, icon: <Compass size={14} /> },
+              { id: "network", label: t.routesTab, icon: <Network size={14} /> },
+              { id: "ticketing", label: t.passesTab, icon: <Ticket size={14} /> },
+              { id: "maps", label: t.mapsTab, icon: <Map size={14} /> },
+              { id: "fares", label: t.faresTab, icon: <TrendingUp size={14} /> },
+              { id: "tips", label: t.tipsTab, icon: <AlertCircle size={14} /> }
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabId)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
                   activeTab === tab.id
                     ? "bg-white dark:bg-zinc-800 shadow-sm text-malaysia-blue dark:text-blue-400 border-slate-200 dark:border-zinc-700 font-extrabold"
                     : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 border-transparent bg-transparent"
@@ -707,7 +797,7 @@ export default function App() {
                 <div className={`${activeTab === tab.id ? "text-malaysia-blue dark:text-sky-400 scale-110" : "text-slate-400"} shrink-0`}>
                   {tab.icon}
                 </div>
-                <span>{tab.label}</span>
+                <span className="tab-label">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -760,12 +850,12 @@ export default function App() {
                     </div>
 
                     {/* Filter selection dropdown */}
-                    <div className="mb-4 flex items-center justify-between text-sm">
-                      <span className="text-slate-500 dark:text-zinc-400 font-medium">{t.currentStation}</span>
+                    <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-sm">
+                      <span className="text-slate-500 dark:text-zinc-400 font-semibold shrink-0">{t.currentStation}</span>
                       <select
                         value={stationFilter}
                         onChange={(e) => setStationFilter(e.target.value)}
-                        className="bg-slate-100 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-lg px-3 py-1.5 border-none font-medium focus:ring-2 focus:ring-malaysia-blue pointer-events-auto"
+                        className="bg-slate-100 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 rounded-lg px-3 py-1.5 border-none font-semibold focus:ring-2 focus:ring-malaysia-blue pointer-events-auto w-full sm:w-auto min-w-0 max-w-full sm:max-w-[200px] truncate text-sm"
                       >
                         {stationsToFilter.map((st) => (
                           <option key={st} value={st}>
@@ -965,369 +1055,239 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* 1B. Two Column visual display: Vertical pipeline on left, Station Info popup on right */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-                    
-                    {/* Column 1: Vertical line track */}
-                    <div className="md:col-span-7 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm max-h-[480px] overflow-y-auto">
-                      <div className="relative pl-10 space-y-7 py-3">
-                        {/* Dynamic pipeline border */}
-                        <div
-                          className="absolute left-4 top-4 bottom-4 w-1.5 rounded"
-                          style={{
-                            backgroundColor: 
-                              selectedNetworkLine === "LRT 5" ? "#EF4444" :
-                              selectedNetworkLine === "MRT 9" ? "#10B981" :
-                              selectedNetworkLine === "MRT 12" ? "#EC4899" :
-                              selectedNetworkLine === "Monorail 8" ? "#84CC16" :
-                              selectedNetworkLine === "KTM 1" ? "#3B82F6" : "#A855F7"
-                          }}
-                        ></div>
+                  {/* 1B. ETA-aware station list */}
+                  {(() => {
+                    const LINE_COLOR: Record<string, string> = {
+                      "LRT 5": "#EF4444", "MRT 9": "#10B981", "MRT 12": "#EC4899",
+                      "Monorail 8": "#84CC16", "KTM 1": "#3B82F6", "ERL 7": "#A855F7"
+                    };
+                    const color = LINE_COLOR[selectedNetworkLine] ?? "#64748B";
+                    const stationList = (selectedNetworkLine === "LRT 5" ? [
+                      { code: "KJ1", name: "Gombak", isInterchange: false, transfers: [] },
+                      { code: "KJ2", name: "Taman Melati", isInterchange: false, transfers: [] },
+                      { code: "KJ3", name: "Wangsa Maju", isInterchange: false, transfers: [] },
+                      { code: "KJ4", name: "Sri Rampai", isInterchange: false, transfers: [] },
+                      { code: "KJ5", name: "Setiawangsa", isInterchange: false, transfers: [] },
+                      { code: "KJ6", name: "Jelatek", isInterchange: false, transfers: [] },
+                      { code: "KJ7", name: "Dato' Keramat", isInterchange: false, transfers: [] },
+                      { code: "KJ8", name: "Damai", isInterchange: false, transfers: [] },
+                      { code: "KJ9", name: "Ampang Park", isInterchange: true, transfers: ["PY19"], tip: "Underground tunnel swap to MRT Putrajaya line." },
+                      { code: "KJ10", name: "KLCC", isInterchange: false, transfers: [], tip: "Twin Towers. Air-con walkway to Bukit Bintang." },
+                      { code: "KJ11", name: "Kampung Baru", isInterchange: false, transfers: [] },
+                      { code: "KJ12", name: "Dang Wangi", isInterchange: false, transfers: [], tip: "Walk 5 min to Bukit Nanas Monorail station." },
+                      { code: "KJ13", name: "Masjid Jamek", isInterchange: true, transfers: ["AG3","SP3"], tip: "Do NOT tap out — walk directly to swap lines." },
+                      { code: "KJ14", name: "Pasar Seni", isInterchange: true, transfers: ["KG16"], tip: "Chinatown hub. Walk to MRT Kajang & old KTM." },
+                      { code: "KJ15", name: "KL Sentral", isInterchange: true, transfers: ["MR1","KA1","KE1","KG15"], tip: "Malaysia's main hub. Follow colour-coded signs." },
+                      { code: "KJ16", name: "Bangsar", isInterchange: false, transfers: [] },
+                      { code: "KJ17", name: "Abdullah Hukum", isInterchange: true, transfers: ["KD01"], tip: "Walkway to Mid Valley Megamall." },
+                      { code: "KJ18", name: "Kerinchi", isInterchange: false, transfers: [] },
+                      { code: "KJ19", name: "Universiti", isInterchange: false, transfers: [] },
+                      { code: "KJ20", name: "Taman Jaya", isInterchange: false, transfers: [] },
+                      { code: "KJ21", name: "Asia Jaya", isInterchange: false, transfers: [] },
+                      { code: "KJ22", name: "Taman Paramount", isInterchange: false, transfers: [] },
+                      { code: "KJ23", name: "Taman Bahagia", isInterchange: false, transfers: [] },
+                      { code: "KJ24", name: "Kelana Jaya", isInterchange: false, transfers: [] },
+                      { code: "KJ25", name: "Lembah Subang", isInterchange: false, transfers: [] },
+                      { code: "KJ26", name: "Ara Damansara", isInterchange: false, transfers: [] },
+                      { code: "KJ27", name: "Glenmarie", isInterchange: false, transfers: [] },
+                      { code: "KJ28", name: "Subang Jaya", isInterchange: true, transfers: ["KD09"], tip: "Interchange with KTM Port Klang Line." },
+                      { code: "KJ29", name: "SS15", isInterchange: false, transfers: [], tip: "Student hub — bubble tea street & cafes." },
+                      { code: "KJ30", name: "SS18", isInterchange: false, transfers: [] },
+                      { code: "KJ31", name: "USJ 7", isInterchange: true, transfers: ["SB7"], tip: "BRT Sunway → Sunway Lagoon & Pyramid." },
+                      { code: "KJ32", name: "Taipan", isInterchange: false, transfers: [] },
+                      { code: "KJ33", name: "Wawasan", isInterchange: false, transfers: [] },
+                      { code: "KJ34", name: "USJ 21", isInterchange: false, transfers: [] },
+                      { code: "KJ35", name: "Alam Megah", isInterchange: false, transfers: [] },
+                      { code: "KJ36", name: "Subang Alam", isInterchange: false, transfers: [] },
+                      { code: "KJ37", name: "Putra Heights", isInterchange: true, transfers: ["SP31"], tip: "Terminal. Cross-platform swap to LRT Sri Petaling." },
+                    ] : selectedNetworkLine === "MRT 9" ? [
+                      { code: "KG04", name: "Kwasa Damansara", isInterchange: true, transfers: ["PY01"], tip: "Dual terminus — platform-skip to swap lines." },
+                      { code: "KG05", name: "Kwasa Sentral", isInterchange: false, transfers: [] },
+                      { code: "KG06", name: "Kota Damansara", isInterchange: false, transfers: [] },
+                      { code: "KG07", name: "Surian", isInterchange: false, transfers: [] },
+                      { code: "KG08", name: "Mutiara Damansara", isInterchange: false, transfers: [], tip: "Bridge link to Ikea & The Curve." },
+                      { code: "KG09", name: "Bandar Utama", isInterchange: false, transfers: [], tip: "Direct to 1 Utama Shopping Mall." },
+                      { code: "KG10", name: "TTDI", isInterchange: false, transfers: [] },
+                      { code: "KG12", name: "Phileo Damansara", isInterchange: false, transfers: [] },
+                      { code: "KG13", name: "Pusat Bandar Damansara", isInterchange: false, transfers: [] },
+                      { code: "KG14", name: "Semantan", isInterchange: false, transfers: [] },
+                      { code: "KG15", name: "Muzium Negara", isInterchange: true, transfers: ["KJ15"], tip: "250m air-con tunnel to KL Sentral." },
+                      { code: "KG16", name: "Pasar Seni", isInterchange: true, transfers: ["KJ14"], tip: "Chinatown. Walkway to LRT Kelana Jaya Line." },
+                      { code: "KG17", name: "Merdeka", isInterchange: true, transfers: ["AG4","SP4"] },
+                      { code: "KG18A", name: "Bukit Bintang", isInterchange: true, transfers: ["MR6"], tip: "Exit A→Lot 10. Exit E→Pavilion KL." },
+                      { code: "KG20", name: "Tun Razak Exchange (TRX)", isInterchange: true, transfers: ["PY23"], tip: "Deepest station. Cross-platform to MRT Putrajaya." },
+                      { code: "KG21", name: "Cochrane", isInterchange: false, transfers: [], tip: "MyTown Mall & Ikea Cheras." },
+                      { code: "KG22", name: "Maluri", isInterchange: true, transfers: ["AG2"] },
+                      { code: "KG23", name: "Taman Pertama", isInterchange: false, transfers: [] },
+                      { code: "KG24", name: "Taman Midah", isInterchange: false, transfers: [] },
+                      { code: "KG25", name: "Taman Mutiara", isInterchange: false, transfers: [] },
+                      { code: "KG26", name: "Taman Connaught", isInterchange: false, transfers: [] },
+                      { code: "KG27", name: "Taman Suntex", isInterchange: false, transfers: [] },
+                      { code: "KG28", name: "Sri Raya", isInterchange: false, transfers: [] },
+                      { code: "KG29", name: "Bandar Tun Hussein Onn", isInterchange: false, transfers: [] },
+                      { code: "KG30", name: "Batu 11 Cheras", isInterchange: false, transfers: [] },
+                      { code: "KG31", name: "Bukit Dukung", isInterchange: false, transfers: [] },
+                      { code: "KG32", name: "Sungai Jernih", isInterchange: false, transfers: [] },
+                      { code: "KG33", name: "Stadium Kajang", isInterchange: false, transfers: [] },
+                      { code: "KG34", name: "Sungai Kantan", isInterchange: false, transfers: [] },
+                      { code: "KG35", name: "Kajang", isInterchange: true, transfers: ["KB06"], tip: "Terminal. Links to KTM Seremban Line." },
+                    ] : selectedNetworkLine === "MRT 12" ? [
+                      { code: "PY01", name: "Kwasa Damansara", isInterchange: true, transfers: ["KG04"] },
+                      { code: "PY02", name: "Kampung Selamat", isInterchange: false, transfers: [] },
+                      { code: "PY03", name: "Sungai Buloh", isInterchange: true, transfers: ["KA04"], tip: "Interchange with KTM Komuter." },
+                      { code: "PY04", name: "Damansara Damai", isInterchange: false, transfers: [] },
+                      { code: "PY05", name: "Sri Damansara Barat", isInterchange: false, transfers: [] },
+                      { code: "PY06", name: "Sri Damansara Sentral", isInterchange: false, transfers: [] },
+                      { code: "PY07", name: "Sri Damansara Timur", isInterchange: false, transfers: [] },
+                      { code: "PY08", name: "Metro Prima", isInterchange: false, transfers: [] },
+                      { code: "PY09", name: "Kepong Baru", isInterchange: false, transfers: [] },
+                      { code: "PY10", name: "Jinjang", isInterchange: false, transfers: [] },
+                      { code: "PY11", name: "Sri Delima", isInterchange: false, transfers: [] },
+                      { code: "PY12", name: "Kampung Batu", isInterchange: true, transfers: ["KC03"] },
+                      { code: "PY13", name: "Kentonmen", isInterchange: false, transfers: [] },
+                      { code: "PY14", name: "Jalan Ipoh", isInterchange: false, transfers: [] },
+                      { code: "PY15", name: "Sentul Barat", isInterchange: false, transfers: [] },
+                      { code: "PY16", name: "Titiwangsa", isInterchange: true, transfers: ["SP1","AG1","MR11"], tip: "Major hub — LRT & Monorail interchange." },
+                      { code: "PY17", name: "Hospital Kuala Lumpur", isInterchange: false, transfers: [] },
+                      { code: "PY18", name: "Raja Uda", isInterchange: false, transfers: [] },
+                      { code: "PY19", name: "Ampang Park", isInterchange: true, transfers: ["KJ9"], tip: "Underground crossing to LRT." },
+                      { code: "PY20", name: "Persiaran KLCC", isInterchange: false, transfers: [] },
+                      { code: "PY21", name: "Conlay", isInterchange: false, transfers: [] },
+                      { code: "PY22", name: "Tun Razak Exchange (TRX)", isInterchange: true, transfers: ["KG20"] },
+                      { code: "PY23", name: "Chan Sow Lin", isInterchange: true, transfers: ["AG11","SP11"] },
+                      { code: "PY24", name: "Kuchai", isInterchange: false, transfers: [] },
+                      { code: "PY25", name: "Taman Naga Emas", isInterchange: false, transfers: [] },
+                      { code: "PY26", name: "Sungai Besi", isInterchange: true, transfers: ["SP16"] },
+                      { code: "PY27", name: "Serdang Raya Utara", isInterchange: false, transfers: [] },
+                      { code: "PY28", name: "Serdang Raya Selatan", isInterchange: false, transfers: [] },
+                      { code: "PY29", name: "Serdang Jaya", isInterchange: false, transfers: [] },
+                      { code: "PY30", name: "UPM", isInterchange: false, transfers: [] },
+                      { code: "PY31", name: "Taman Equine", isInterchange: false, transfers: [] },
+                      { code: "PY32", name: "Putra Permai", isInterchange: false, transfers: [] },
+                      { code: "PY33", name: "16 Sierra", isInterchange: false, transfers: [] },
+                      { code: "PY34", name: "Cyberjaya Utara", isInterchange: false, transfers: [] },
+                      { code: "PY35", name: "Cyberjaya City Centre", isInterchange: false, transfers: [] },
+                      { code: "PY36", name: "Putrajaya Sentral", isInterchange: true, transfers: ["KE3"], tip: "Terminal. ERL link to Airport." },
+                    ] : selectedNetworkLine === "Monorail 8" ? [
+                      { code: "MR1", name: "KL Sentral Monorail", isInterchange: true, transfers: ["KJ15"], tip: "Walk through Nu Sentral Mall to main hub." },
+                      { code: "MR2", name: "Tun Sambanthan", isInterchange: false, transfers: [], tip: "Brickfields Little India." },
+                      { code: "MR3", name: "Maharajalela", isInterchange: false, transfers: [] },
+                      { code: "MR4", name: "Hang Tuah Interchange", isInterchange: true, transfers: ["SP9","AG9"], tip: "Direct to LaLaport BBCC." },
+                      { code: "MR5", name: "Imbi", isInterchange: false, transfers: [], tip: "Berjaya Times Square Mall." },
+                      { code: "MR6", name: "Bukit Bintang", isInterchange: true, transfers: ["KG18A"], tip: "Walk down to MRT Kajang line." },
+                      { code: "MR7", name: "Raja Chulan", isInterchange: false, transfers: [] },
+                      { code: "MR8", name: "Bukit Nanas", isInterchange: true, transfers: ["KJ12"], tip: "5-min walk to Dang Wangi LRT." },
+                      { code: "MR9", name: "Medan Tuanku", isInterchange: false, transfers: [] },
+                      { code: "MR10", name: "Chow Kit", isInterchange: false, transfers: [] },
+                      { code: "MR11", name: "Titiwangsa Terminus", isInterchange: true, transfers: ["SP1","PY17"] },
+                    ] : selectedNetworkLine === "KTM 1" ? [
+                      { code: "KC05", name: "Batu Caves", isInterchange: false, transfers: [], tip: "Gateway to Batu Caves Hindu shrines." },
+                      { code: "KC04", name: "Taman Wahyu", isInterchange: false, transfers: [] },
+                      { code: "KC03", name: "Kampung Batu", isInterchange: true, transfers: ["PY12"] },
+                      { code: "KC02", name: "Batu Kentonmen", isInterchange: false, transfers: [] },
+                      { code: "KC01", name: "Sentul", isInterchange: false, transfers: [] },
+                      { code: "KA04", name: "Putra", isInterchange: true, transfers: ["KTM 2"] },
+                      { code: "KA03", name: "Bank Negara", isInterchange: true, transfers: ["KJ12","KTM 2"] },
+                      { code: "KA02", name: "Kuala Lumpur (Old Station)", isInterchange: true, transfers: ["KJ14"] },
+                      { code: "KA01", name: "KL Sentral", isInterchange: true, transfers: ["KJ15"], tip: "Main hub connection." },
+                      { code: "KB01", name: "Mid Valley", isInterchange: false, transfers: [], tip: "Bridge to Mid Valley Megamall." },
+                      { code: "KB02", name: "Seputeh", isInterchange: false, transfers: [] },
+                      { code: "KB03", name: "Salak Selatan", isInterchange: false, transfers: [] },
+                      { code: "KB04", name: "Bandar Tasik Selatan", isInterchange: true, transfers: ["SP15","KE2"], tip: "TBS south-bound bus terminal." },
+                      { code: "KB05", name: "Serdang", isInterchange: false, transfers: [] },
+                      { code: "KB06", name: "Kajang", isInterchange: true, transfers: ["KG35"] },
+                      { code: "KB07", name: "UKM", isInterchange: false, transfers: [] },
+                      { code: "KB08", name: "Bangi", isInterchange: false, transfers: [] },
+                      { code: "KB09", name: "Batang Benar", isInterchange: false, transfers: [] },
+                      { code: "KB10", name: "Nilai", isInterchange: false, transfers: [] },
+                      { code: "KB11", name: "Labu", isInterchange: false, transfers: [] },
+                      { code: "KB12", name: "Tiroi", isInterchange: false, transfers: [] },
+                      { code: "KB13", name: "Seremban", isInterchange: false, transfers: [] },
+                      { code: "KB14", name: "Senawang", isInterchange: false, transfers: [] },
+                      { code: "KB15", name: "Sungai Gadut", isInterchange: false, transfers: [] },
+                      { code: "KB16", name: "Rembau", isInterchange: false, transfers: [] },
+                      { code: "KB17", name: "Pulau Sebang / Tampin", isInterchange: false, transfers: [] },
+                    ] : [
+                      { code: "KE1", name: "KL Sentral Airport Hub", isInterchange: true, transfers: ["KJ15"], tip: "ERL gates inside concourse. Buy online 10% off." },
+                      { code: "KE2", name: "Bandar Tasik Selatan (TBS)", isInterchange: true, transfers: ["SP15","KB04"] },
+                      { code: "KE3", name: "Putrajaya Sentral", isInterchange: true, transfers: ["PY36"] },
+                      { code: "KE4", name: "Salak Tinggi", isInterchange: false, transfers: [] },
+                      { code: "KE5", name: "KLIA Terminal 1", isInterchange: false, transfers: [], tip: "Follow signs to airport check-in." },
+                      { code: "KE6", name: "KLIA Terminal 2 (KLIA2)", isInterchange: false, transfers: [], tip: "Low-cost terminal. Under Gateway@KLIA2." },
+                    ]);
 
-                        {(selectedNetworkLine === "LRT 5" ? [
-                          { code: "KJ1", name: "Gombak", isInterchange: false, transfers: [] },
-                          { code: "KJ2", name: "Taman Melati", isInterchange: false, transfers: [] },
-                          { code: "KJ3", name: "Wangsa Maju", isInterchange: false, transfers: [] },
-                          { code: "KJ4", name: "Sri Rampai", isInterchange: false, transfers: [] },
-                          { code: "KJ5", name: "Setiawangsa", isInterchange: false, transfers: [] },
-                          { code: "KJ6", name: "Jelatek", isInterchange: false, transfers: [] },
-                          { code: "KJ7", name: "Dato' Keramat", isInterchange: false, transfers: [] },
-                          { code: "KJ8", name: "Damai", isInterchange: false, transfers: [] },
-                          { code: "KJ9", name: "Ampang Park", isInterchange: true, transfers: ["PY19"], tip: "Underground tunnel swap to MRT Putrajaya line." },
-                          { code: "KJ10", name: "KLCC", isInterchange: false, transfers: [], tip: "Twin Towers. Air-con walkway to Bukit Bintang." },
-                          { code: "KJ11", name: "Kampung Baru", isInterchange: false, transfers: [] },
-                          { code: "KJ12", name: "Dang Wangi", isInterchange: false, transfers: [], tip: "Walking link (5 mins) to Bukit Nanas Monorail." },
-                          { code: "KJ13", name: "Masjid Jamek", isInterchange: true, transfers: ["AG3", "SP3"], tip: "Upper levels connect to Ampang / Sri Petaling train lines." },
-                          { code: "KJ14", name: "Pasar Seni", isInterchange: true, transfers: ["KG16"], tip: "Chinatown hub. Connects to MRT Kajang and KTM Kuala Lumpur station." },
-                          { code: "KJ15", name: "KL Sentral", isInterchange: true, transfers: ["MR1", "KA1", "KE1", "KG15"], tip: "Transit core. Connected directly inside to Nu Sentral." },
-                          { code: "KJ16", name: "Bangsar", isInterchange: false, transfers: [] },
-                          { code: "KJ17", name: "Abdullah Hukum", isInterchange: true, transfers: ["KD01"], tip: "Walkway link to Mid Valley Megamall." },
-                          { code: "KJ18", name: "Kerinchi", isInterchange: false, transfers: [] },
-                          { code: "KJ19", name: "Universiti", isInterchange: false, transfers: [], tip: "University of Malaya (UM) gateway." },
-                          { code: "KJ20", name: "Taman Jaya", isInterchange: false, transfers: [] },
-                          { code: "KJ21", name: "Asia Jaya", isInterchange: false, transfers: [] },
-                          { code: "KJ22", name: "Taman Paramount", isInterchange: false, transfers: [], tip: "Vibrant neighborhood with hip cafes." },
-                          { code: "KJ23", name: "Taman Bahagia", isInterchange: false, transfers: [] },
-                          { code: "KJ24", name: "Kelana Jaya", isInterchange: false, transfers: [] },
-                          { code: "KJ25", name: "Lembah Subang", isInterchange: false, transfers: [] },
-                          { code: "KJ26", name: "Ara Damansara", isInterchange: false, transfers: [], tip: "Links to Evolve Concept Mall." },
-                          { code: "KJ27", name: "Glenmarie", isInterchange: false, transfers: [] },
-                          { code: "KJ28", name: "Subang Jaya", isInterchange: true, transfers: ["KD09"], tip: "Interchange with KTM Port Klang Line." },
-                          { code: "KJ29", name: "SS15", isInterchange: false, transfers: [], tip: "Student hub. Famous bubble tea street & cafes." },
-                          { code: "KJ30", name: "SS18", isInterchange: false, transfers: [] },
-                          { code: "KJ31", name: "USJ 7", isInterchange: true, transfers: ["SB7"], tip: "Interchange with BRT Sunway Line." },
-                          { code: "KJ32", name: "Taipan", isInterchange: false, transfers: [], tip: "USJ business centre." },
-                          { code: "KJ33", name: "Wawasan", isInterchange: false, transfers: [] },
-                          { code: "KJ34", name: "USJ 21", isInterchange: false, transfers: [] },
-                          { code: "KJ35", name: "Alam Megah", isInterchange: false, transfers: [] },
-                          { code: "KJ36", name: "Subang Alam", isInterchange: false, transfers: [] },
-                          { code: "KJ37", name: "Putra Heights", isInterchange: true, transfers: ["SP31"], tip: "Terminal. Direct platform cross-transfer to LRT Sri Petaling Line." }
-                        ] : selectedNetworkLine === "MRT 9" ? [
-                          { code: "KG04", name: "Kwasa Damansara", isInterchange: true, transfers: ["PY01"], tip: "Dual terminus. Platform-skip to swap lines." },
-                          { code: "KG05", name: "Kwasa Sentral", isInterchange: false, transfers: [] },
-                          { code: "KG06", name: "Kota Damansara", isInterchange: false, transfers: [] },
-                          { code: "KG07", name: "Surian", isInterchange: false, transfers: [] },
-                          { code: "KG08", name: "Mutiara Damansara", isInterchange: false, transfers: [], tip: "Direct link bridge to Ikea & The Curve." },
-                          { code: "KG09", name: "Bandar Utama", isInterchange: false, transfers: [], tip: "Connected directly to 1 Utama Shopping Mall." },
-                          { code: "KG10", name: "TTDI", isInterchange: false, transfers: [] },
-                          { code: "KG12", name: "Phileo Damansara", isInterchange: false, transfers: [] },
-                          { code: "KG13", name: "Pusat Bandar Damansara", isInterchange: false, transfers: [] },
-                          { code: "KG14", name: "Semantan", isInterchange: false, transfers: [] },
-                          { code: "KG15", name: "Muzium Negara", isInterchange: true, transfers: ["KJ15"], tip: "Linked via 250m air-con walkway tunnel to KL Sentral." },
-                          { code: "KG16", name: "Pasar Seni", isInterchange: true, transfers: ["KJ14"], tip: "Chinatown hub. Integrated walkway to LRT Kelana Jaya Line." },
-                          { code: "KG17", name: "Merdeka", isInterchange: true, transfers: ["AG4", "SP4"], tip: "Walkway link to Plaza Rakyat (LRT Ampang Line)." },
-                          { code: "KG18A", name: "Bukit Bintang", isInterchange: true, transfers: ["MR6"], tip: "Exit A to Lot 10. Exit E into Pavilion KL mall." },
-                          { code: "KG20", name: "Tun Razak Exchange (TRX)", isInterchange: true, transfers: ["PY23"], tip: "Deepest station. Direct cross-platform swap with MRT Putrajaya Line." },
-                          { code: "KG21", name: "Cochrane", isInterchange: false, transfers: [], tip: "Connected directly to MyTown Mall and Ikea Cheras." },
-                          { code: "KG22", name: "Maluri", isInterchange: true, transfers: ["AG2"], tip: "Interchange to LRT Ampang Line. Direct link to Aeon Maluri." },
-                          { code: "KG23", name: "Taman Pertama", isInterchange: false, transfers: [] },
-                          { code: "KG24", name: "Taman Midah", isInterchange: false, transfers: [] },
-                          { code: "KG25", name: "Taman Mutiara", isInterchange: false, transfers: [], tip: "Links directly to Cheras LeisureMall." },
-                          { code: "KG26", name: "Taman Connaught", isInterchange: false, transfers: [] },
-                          { code: "KG27", name: "Taman Suntex", isInterchange: false, transfers: [] },
-                          { code: "KG28", name: "Sri Raya", isInterchange: false, transfers: [] },
-                          { code: "KG29", name: "Bandar Tun Hussein Onn", isInterchange: false, transfers: [] },
-                          { code: "KG30", name: "Batu 11 Cheras", isInterchange: false, transfers: [] },
-                          { code: "KG31", name: "Bukit Dukung", isInterchange: false, transfers: [] },
-                          { code: "KG32", name: "Sungai Jernih", isInterchange: false, transfers: [] },
-                          { code: "KG33", name: "Stadium Kajang", isInterchange: false, transfers: [], tip: "Next to Kajang stadium and famous Satay spots." },
-                          { code: "KG34", name: "Sungai Kantan", isInterchange: false, transfers: [] },
-                          { code: "KG35", name: "Kajang", isInterchange: true, transfers: ["KB06"], tip: "Eastern terminus. Merges with KTM Seremban Line." }
-                        ] : selectedNetworkLine === "MRT 12" ? [
-                          { code: "PY01", name: "Kwasa Damansara", isInterchange: true, transfers: ["KG04"] },
-                          { code: "PY02", name: "Kampung Selamat", isInterchange: false, transfers: [] },
-                          { code: "PY03", name: "Sungai Buloh", isInterchange: true, transfers: ["KA04"], tip: "Interchange with KTM Komuter Services." },
-                          { code: "PY04", name: "Damansara Damai", isInterchange: false, transfers: [] },
-                          { code: "PY05", name: "Sri Damansara Barat", isInterchange: false, transfers: [] },
-                          { code: "PY06", name: "Sri Damansara Sentral", isInterchange: false, transfers: [] },
-                          { code: "PY07", name: "Sri Damansara Timur", isInterchange: false, transfers: [] },
-                          { code: "PY08", name: "Metro Prima", isInterchange: false, transfers: [] },
-                          { code: "PY09", name: "Kepong Baru", isInterchange: false, transfers: [] },
-                          { code: "PY10", name: "Jinjang", isInterchange: false, transfers: [] },
-                          { code: "PY11", name: "Sri Delima", isInterchange: false, transfers: [] },
-                          { code: "PY12", name: "Kampung Batu", isInterchange: true, transfers: ["KC03"], tip: "KTM Komuter link station." },
-                          { code: "PY13", name: "Kentonmen", isInterchange: false, transfers: [] },
-                          { code: "PY14", name: "Jalan Ipoh", isInterchange: false, transfers: [] },
-                          { code: "PY15", name: "Sentul Barat", isInterchange: false, transfers: [] },
-                          { code: "PY16", name: "Titiwangsa", isInterchange: true, transfers: ["SP1", "AG1", "MR11"], tip: "Major interchange hub with LRT & Monorail." },
-                          { code: "PY17", name: "Hospital Kuala Lumpur", isInterchange: false, transfers: [], tip: "Direct access to HKL medical complex." },
-                          { code: "PY18", name: "Raja Uda", isInterchange: false, transfers: [] },
-                          { code: "PY19", name: "Ampang Park", isInterchange: true, transfers: ["KJ9"], tip: "Underground crossing. Follow signs to swap to LRT." },
-                          { code: "PY20", name: "Persiaran KLCC", isInterchange: false, transfers: [], tip: "Access to KLCC east corporate zones." },
-                          { code: "PY21", name: "Conlay", isInterchange: false, transfers: [], tip: "Near Kraftangan Malaysia & Bukit Bintang east." },
-                          { code: "PY22", name: "Tun Razak Exchange (TRX)", isInterchange: true, transfers: ["KG20"], tip: "Deep underground exchange with Kajang MRT." },
-                          { code: "PY23", name: "Chan Sow Lin", isInterchange: true, transfers: ["AG11", "SP11"], tip: "LRT Ampang Line cross-platform swap." },
-                          { code: "PY24", name: "Kuchai", isInterchange: false, transfers: [] },
-                          { code: "PY25", name: "Taman Naga Emas", isInterchange: false, transfers: [] },
-                          { code: "PY26", name: "Sungai Besi", isInterchange: true, transfers: ["SP16"], tip: "Interchange to LRT Sri Petaling Line." },
-                          { code: "PY27", name: "Serdang Raya Utara", isInterchange: false, transfers: [] },
-                          { code: "PY28", name: "Serdang Raya Selatan", isInterchange: false, transfers: [] },
-                          { code: "PY29", name: "Serdang Jaya", isInterchange: false, transfers: [] },
-                          { code: "PY30", name: "UPM", isInterchange: false, transfers: [], tip: "Universiti Putra Malaysia gate." },
-                          { code: "PY31", name: "Taman Equine", isInterchange: false, transfers: [] },
-                          { code: "PY32", name: "Putra Permai", isInterchange: false, transfers: [] },
-                          { code: "PY33", name: "16 Sierra", isInterchange: false, transfers: [] },
-                          { code: "PY34", name: "Cyberjaya Utara", isInterchange: false, transfers: [] },
-                          { code: "PY35", name: "Cyberjaya City Centre", isInterchange: false, transfers: [] },
-                          { code: "PY36", name: "Putrajaya Sentral", isInterchange: true, transfers: ["KE3"], tip: "Terminal. ERL link to Airport." }
-                        ] : selectedNetworkLine === "Monorail 8" ? [
-                          { code: "MR1", name: "KL Sentral Monorail", isInterchange: true, transfers: ["KJ15"], tip: "Requires walking through Nu Sentral Mall." },
-                          { code: "MR2", name: "Tun Sambanthan", isInterchange: false, transfers: [], tip: "Heart of Brickfields Little India." },
-                          { code: "MR3", name: "Maharajalela", isInterchange: false, transfers: [] },
-                          { code: "MR4", name: "Hang Tuah Interchange", isInterchange: true, transfers: ["SP9", "AG9"], tip: "Direct link to LaLaport BBCC." },
-                          { code: "MR5", name: "Imbi", isInterchange: false, transfers: [], tip: "Direct link to Berjaya Times Square Mall." },
-                          { code: "MR6", name: "Bukit Bintang", isInterchange: true, transfers: ["KG18A"], tip: "Walk down link walkway to MRT Kajang line." },
-                          { code: "MR7", name: "Raja Chulan", isInterchange: false, transfers: [], tip: "Central commercial offices hub." },
-                          { code: "MR8", name: "Bukit Nanas", isInterchange: true, transfers: ["KJ12"], tip: "Short walk link to Dang Wangi LRT (5 mins)." },
-                          { code: "MR9", name: "Medan Tuanku", isInterchange: false, transfers: [], tip: "Access to Quill City Mall." },
-                          { code: "MR10", name: "Chow Kit", isInterchange: false, transfers: [], tip: "Famous traditional wet market precinct." },
-                          { code: "MR11", name: "Titiwangsa Terminus", isInterchange: true, transfers: ["SP1", "PY17"], tip: "Merges with Ampang LRT and Putrajaya MRT." }
-                        ] : selectedNetworkLine === "KTM 1" ? [
-                          { code: "KC05", name: "Batu Caves", isInterchange: false, transfers: [], tip: "Gateway to Batu Caves Hindu shrines." },
-                          { code: "KC04", name: "Taman Wahyu", isInterchange: false, transfers: [] },
-                          { code: "KC03", name: "Kampung Batu", isInterchange: true, transfers: ["PY12"] },
-                          { code: "KC02", name: "Batu Kentonmen", isInterchange: false, transfers: [] },
-                          { code: "KC01", name: "Sentul", isInterchange: false, transfers: [] },
-                          { code: "KA04", name: "Putra", isInterchange: true, transfers: ["KTM 2"] },
-                          { code: "KA03", name: "Bank Negara", isInterchange: true, transfers: ["KJ12", "KTM 2"], tip: "Short walk to Bandaraya LRT station." },
-                          { code: "KA02", name: "Kuala Lumpur (Old Station)", isInterchange: true, transfers: ["KJ14"], tip: "Historic station. Connects to Pasar Seni LRT." },
-                          { code: "KA01", name: "KL Sentral", isInterchange: true, transfers: ["KJ15"], tip: "Main hub connection." },
-                          { code: "KB01", name: "Mid Valley", isInterchange: false, transfers: [], tip: "Direct bridge to Mid Valley Megamall." },
-                          { code: "KB02", name: "Seputeh", isInterchange: false, transfers: [] },
-                          { code: "KB03", name: "Salak Selatan", isInterchange: false, transfers: [] },
-                          { code: "KB04", name: "Bandar Tasik Selatan", isInterchange: true, transfers: ["SP15", "KE2"], tip: "Connected to TBS south-bound bus terminal." },
-                          { code: "KB05", name: "Serdang", isInterchange: false, transfers: [], tip: "Boats connection to The Mines Mall." },
-                          { code: "KB06", name: "Kajang", isInterchange: true, transfers: ["KG35"] },
-                          { code: "KB07", name: "UKM", isInterchange: false, transfers: [], tip: "National University of Malaysia." },
-                          { code: "KB08", name: "Bangi", isInterchange: false, transfers: [] },
-                          { code: "KB09", name: "Batang Benar", isInterchange: false, transfers: [] },
-                          { code: "KB10", name: "Nilai", isInterchange: false, transfers: [], tip: "Terminal for buses to Sepang Circuit / KLIA." },
-                          { code: "KB11", name: "Labu", isInterchange: false, transfers: [] },
-                          { code: "KB12", name: "Tiroi", isInterchange: false, transfers: [] },
-                          { code: "KB13", name: "Seremban", isInterchange: false, transfers: [], tip: "Negeri Sembilan capital stop." },
-                          { code: "KB14", name: "Senawang", isInterchange: false, transfers: [] },
-                          { code: "KB15", name: "Sungai Gadut", isInterchange: false, transfers: [] },
-                          { code: "KB16", name: "Rembau", isInterchange: false, transfers: [] },
-                          { code: "KB17", name: "Pulau Sebang / Tampin", isInterchange: false, transfers: [], tip: "Southern terminus near Melaka border." }
-                        ] : [
-                          { code: "KE1", name: "KL Sentral AirPort Hub", isInterchange: true, transfers: ["KJ15"], tip: "ERL Terminal gates inside main concourse." },
-                          { code: "KE2", name: "Bandar Tasik Selatan (TBS)", isInterchange: true, transfers: ["SP15", "KB04"] },
-                          { code: "KE3", name: "Putrajaya Sentral", isInterchange: true, transfers: ["PY36"], tip: "Gateway to Putrajaya administrative district." },
-                          { code: "KE4", name: "Salak Tinggi", isInterchange: false, transfers: [] },
-                          { code: "KE5", name: "KLIA Terminal 1 Airport", isInterchange: false, transfers: [], tip: "Airport platform level. Direct links to check-in counter." },
-                          { code: "KE6", name: "KLIA Terminal 2 Airport", isInterchange: false, transfers: [], tip: "Airport low-cost terminal station. Underneath Gateway@KLIA2." }
-                        ]).map((st) => (
-                          <button
-                            key={st.code}
-                            onClick={() => setSelectedStationCode(st.code)}
-                            className={`w-full text-left relative flex items-center justify-between p-2.5 rounded-xl transition-all cursor-pointer ${
-                              selectedStationCode === st.code
-                                ? "bg-slate-100/80 dark:bg-zinc-800 shadow-sm border border-slate-200 dark:border-zinc-700/80"
-                                : "hover:bg-slate-50 dark:hover:bg-zinc-800/40 border border-transparent"
-                            }`}
-                          >
-                            {/* Track dot node indicator */}
-                            <div
-                              className={`absolute -left-[31px] w-5 h-5 rounded-full border-4 border-white dark:border-zinc-800 flex items-center justify-center transition-all ${
-                                selectedStationCode === st.code
-                                  ? "bg-[#EAB308] scale-125 shadow-md"
-                                  : "bg-slate-400 dark:bg-zinc-500"
-                              }`}
-                            >
-                              {selectedStationCode === st.code && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
-                            </div>
+                    const selIdx = stationList.findIndex(s => s.code === selectedStationCode);
+                    const arrivingIdx = selIdx >= 0 ? selIdx : Math.floor(stationList.length / 3);
 
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-[10.5px] font-bold px-1.5 py-0.5 rounded tracking-wide text-white" style={{
-                                backgroundColor: 
-                                  selectedNetworkLine === "LRT 5" ? "#EF4444" :
-                                  selectedNetworkLine === "MRT 9" ? "#10B981" :
-                                  selectedNetworkLine === "MRT 12" ? "#EC4899" :
-                                  selectedNetworkLine === "Monorail 8" ? "#84CC16" :
-                                  selectedNetworkLine === "KTM 1" ? "#3B82F6" : "#A855F7"
-                              }}>
-                                {st.code}
-                              </span>
-                              <div className="text-left">
-                                <h5 className="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                                  {st.name}
-                                </h5>
-                              </div>
-                            </div>
+                    const getEta = (idx: number) => {
+                      const diff = idx - arrivingIdx;
+                      if (diff === 0) return { label: "ARRIVING", cls: "bg-emerald-500 text-white animate-pulse", dimmed: false };
+                      if (diff === -1) return { label: "DEPARTED", cls: "bg-slate-300 dark:bg-zinc-600 text-slate-600 dark:text-zinc-400", dimmed: false };
+                      if (diff < -1) return { label: "DEPARTED", cls: "bg-slate-100 dark:bg-zinc-800 text-slate-300 dark:text-zinc-600", dimmed: true };
+                      if (diff === 1) return { label: "NEXT", cls: "bg-amber-400 text-slate-900 font-bold", dimmed: false };
+                      return { label: `~${diff * 3}m`, cls: "bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400", dimmed: false };
+                    };
 
-                            {/* Interchanges labels */}
-                            {st.isInterchange && (
-                              <div className="flex gap-1 shrink-0">
-                                {st.transfers.slice(0, 3).map((tr) => (
-                                  <span key={tr} className="text-[8.5px] font-mono font-bold bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-300 px-1 py-0.5 rounded border border-slate-200 dark:border-zinc-700">
-                                    {tr}
-                                  </span>
-                                ))}
-                                {st.transfers.length > 3 && (
-                                  <span className="text-[8.5px] font-bold text-slate-400 font-mono">+{st.transfers.length - 3}</span>
-                                )}
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    const lineName = selectedNetworkLine === "LRT 5" ? "Kelana Jaya Line" : selectedNetworkLine === "MRT 9" ? "Kajang MRT" : selectedNetworkLine === "MRT 12" ? "Putrajaya MRT" : selectedNetworkLine === "Monorail 8" ? "KL Monorail" : selectedNetworkLine === "KTM 1" ? "KTM Seremban" : "KLIA Ekspres/Transit";
 
-                    {/* Column 2: Interactive detail display */}
-                    <div className="md:col-span-5 flex flex-col justify-between bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl p-4 sm:p-5 shadow-sm">
-                      <div>
-                        <div className="flex items-center gap-2 mb-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 p-2.5 rounded-xl">
-                          <CheckCircle2 size={16} className="text-amber-500 shrink-0" />
-                          <h4 className="font-extrabold text-amber-800 dark:text-amber-300 text-xs uppercase tracking-wider">
-                            Interactive Station Detail
-                          </h4>
+                    return (
+                      <div className="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-sm overflow-hidden">
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900">
+                          <div className="w-3 h-3 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: color }} />
+                          <span className="font-bold text-sm text-slate-800 dark:text-white">{lineName}</span>
+                          <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono">{stationList.length} stations · click to set arriving</span>
                         </div>
-                        
-                        {/* Selected info block */}
-                        {(() => {
-                          // Find st details using helper mapping or fall back gracefully
-                          const getStationDetail = (code: string) => {
-                            const detailsMap: Record<string, { lines: string; extra: string; eat: string; travel: string }> = {
-                              // LRT 5
-                              "KJ1": { lines: "LRT Kelana Jaya Line", extra: "Gombak is the northern terminus of the Kelana Jaya Line. It features a huge multi-story park-and-ride facility.", eat: "Local Malay food stalls inside the station and street food nearby.", travel: "Direct coach buses leave regularly from the station ground level to Awana Skyway, Genting Highlands." },
-                              "KJ2": { lines: "LRT Kelana Jaya Line", extra: "Taman Melati is located close to the TAR UMT campus. Extremely popular among college students.", eat: "A wide range of cheap student-friendly cafes and local restaurants outside the station.", travel: "Feeder buses and shared taxis run frequently to surrounding residential areas." },
-                              "KJ3": { lines: "LRT Kelana Jaya Line", extra: "Wangsa Maju is one of the oldest and busiest stations on the line. Serves a high density of student and commuter apartments.", eat: "Famous Wangsa Maju street burger stalls, Mamak shops, and local bubble tea chains.", travel: "Feeder bus T250 connects directly to Setapak Central Shopping Mall." },
-                              "KJ4": { lines: "LRT Kelana Jaya Line", extra: "Sri Rampai is a partially underground station. Direct connection to Wangsa Walk Mall via walking paths.", eat: "Various local restaurants and food courts inside nearby Wangsa Walk Mall.", travel: "Feeder buses connect to Section 10 Wangsa Maju and Sri Rampai business area." },
-                              "KJ9": { lines: "LRT Kelana Jaya & MRT Putrajaya Lines", extra: "Ampang Park is a central underground interchange station that links the LRT and MRT Putrajaya lines via a covered pedestrian linkway.", eat: "Intermark Mall food court and high-end dining options are a short walk away.", travel: "Located near many foreign embassies and corporate headquarters on Jalan Ampang." },
-                              "KJ10": { lines: "LRT Kelana Jaya Line", extra: "KLCC is the premier tourist stop, located directly underneath the Suria KLCC shopping mall and Petronas Twin Towers.", eat: "Suria KLCC food courts (Signature Food Court and Rasa Food Arena) and premium restaurants.", travel: "Step outside to explore KLCC Park, or take the air-conditioned elevated walkway (15 mins walk) to Bukit Bintang." },
-                              "KJ11": { lines: "LRT Kelana Jaya Line", extra: "Kampung Baru is a traditional Malay enclave in the heart of Kuala Lumpur, contrasting with the nearby modern skyscrapers.", eat: "Famous local Malay cuisine, including Nasi Lemak Wanjo and various grilled fish (Ikan Bakar) stalls.", travel: "Cross the beautiful Saloma Link pedestrian bridge to walk directly to KLCC in 10 minutes." },
-                              "KJ12": { lines: "LRT Kelana Jaya Line", extra: "Dang Wangi is close to the Bukit Nanas forest reserve. Easy walking link to the KL Monorail line (Bukit Nanas station).", eat: "Local heritage coffee shops and trendy cafes along Jalan Capital.", travel: "Walk about 5 minutes to Bukit Nanas Monorail station to swap lines." },
-                              "KJ13": { lines: "LRT Kelana Jaya & LRT Ampang/Sri Petaling Lines", extra: "Masjid Jamek is a major interchange. Seamless transfer between Kelana Jaya Line and Ampang/Sri Petaling lines without tapping out.", eat: "Traditional Indian-Muslim food, Murtabak, and street snacks around the Masjid India bazaar.", travel: "Steps away from the historic Masjid Jamek mosque, Merdeka Square, and River of Life confluence." },
-                              "KJ14": { lines: "LRT Kelana Jaya & MRT Kajang Lines", extra: "Pasar Seni is adjacent to Kuala Lumpur's Chinatown. Direct integrated underground walkway to MRT Kajang line.", eat: "Chinatown street food, Petaling Street cafes, and Central Market food stalls.", travel: "Walk across the bridge to access the old KTM Kuala Lumpur railway station and the central RapidKL bus hub." },
-                              "KJ15": { lines: "LRT Kelana Jaya, MRT, Monorail & ERL Lines", extra: "KL Sentral is the ultimate public transport hub of Malaysia, connecting LRT, MRT, Monorail, KTM Komuter, ETS, and airport rails.", eat: "Dozens of restaurants in Nu Sentral Mall (Levels 3 & 4), local food stalls, and Brickfields restaurants.", travel: "Express buses to Genting Highlands and KLIA Airport depart from the lower ground bus terminal." },
-                              "KJ28": { lines: "LRT Kelana Jaya & KTM Komuter Lines", extra: "Subang Jaya connects the LRT line with KTM Komuter services. Very convenient for commuters traveling to Klang or Shah Alam.", eat: "Numerous eateries inside Subang Parade, Aeon Big, and Empire Shopping Gallery right next door.", travel: "Easy transfer to KTM trains. Direct walking links to nearby shopping complexes." },
-                              "KJ29": { lines: "LRT Kelana Jaya Line", extra: "SS15 is a famous student and commercial hotspot in Subang Jaya. Highly active and vibrant neighborhood.", eat: "Famous bubble tea street, hipster cafes, SS15 wet market food court, and local burger joints.", travel: "Feeder buses serve nearby residential areas and university campuses." },
-                              "KJ31": { lines: "LRT Kelana Jaya Line & BRT Sunway Line", extra: "USJ 7 is the interchange station to the BRT Sunway Line, which links directly to Sunway Lagoon and Sunway Pyramid.", eat: "Sunway Pyramid Mall food courts and restaurants are easily reachable via the BRT line.", travel: "Swap to the electric elevated BRT buses to navigate around Sunway resort city." },
-                              "KJ37": { lines: "LRT Kelana Jaya & LRT Sri Petaling Lines", extra: "Putra Heights is a dual-terminus interchange station. Walk directly across the platform to transfer between lines.", eat: "Local suburban shops, bakeries, and cafes right outside the ticket barriers.", travel: "Buses connect to the southern parts of Shah Alam and Puchong." },
-                              // MRT 9
-                              "KG04": { lines: "MRT Kajang & MRT Putrajaya Lines", extra: "Kwasa Damansara is a dual-interchange terminus for the Kajang and Putrajaya MRT lines, featuring a massive park-and-ride facility.", eat: "Convenient snack kiosks inside the paid concourse area.", travel: "Change trains by walking directly across the platform (takes under 30 seconds)." },
-                              "KG15": { lines: "MRT Kajang Line", extra: "Muzium Negara is located right next to the National Museum of Malaysia. Connected to KL Sentral via a 250m air-conditioned pedestrian tunnel.", eat: "Museum cafe, or walk through the underground tunnel to KL Sentral's massive food court.", travel: "Direct pedestrian entry to the National Museum. Follow underground signs for KL Sentral trains." },
-                              "KG16": { lines: "MRT Kajang & LRT Lines", extra: "Pasar Seni is adjacent to Chinatown. Beautiful deep blue glazed tiles representing the heritage of KL.", eat: "Petaling Street night market stalls and modern hipster cafés.", travel: "Chinatown, Central Market and historic colonial structures are reachable instantly." },
-                              "KG18A": { lines: "MRT Kajang & KL Monorail Lines", extra: "Bukit Bintang is the heart of KL's retail golden triangle. Massive underground escalators connect to multiple exits.", eat: "Lot 10 Hutong Food Court (famous local hawker brands), Jalan Alor food street, and high-end malls.", travel: "Exit D goes straight into Lot 10. Exit E goes into Pavilion. Follow overhead bridge signs to transfer to Monorail." },
-                              "KG20": { lines: "MRT Kajang & MRT Putrajaya Lines", extra: "Tun Razak Exchange (TRX) is the deepest underground station in Malaysia. It is a major interchange between Kajang and Putrajaya MRT lines.", eat: "Numerous premium restaurants and dining options inside the connected Exchange TRX mall.", travel: "Direct underground access to the TRX corporate financial offices and mall corridors." },
-                              "KG35": { lines: "MRT Kajang & KTM Komuter Lines", extra: "Kajang is the eastern terminus of the Kajang MRT line, merging directly with KTM Komuter and ETS rail services.", eat: "Famous Kajang Satay restaurants are a short walk or taxi ride away.", travel: "Transfer directly to KTM Komuter services heading south to Negeri Sembilan." },
-                              // MRT 12
-                              "PY16": { lines: "MRT Putrajaya & LRT Ampang/Sri Petaling Lines", extra: "Titiwangsa is a northern transport hub, connecting the MRT Putrajaya line, KL Monorail, and LRT lines.", eat: "Local Malay and Chinese street food stalls surrounding the Titiwangsa bus terminal.", travel: "Direct connection to the Pekeliling Bus Terminal for regional buses to Pahang and the East Coast." },
-                              "PY19": { lines: "MRT Putrajaya & LRT Kelana Jaya Lines", extra: "Ampang Park connects the LRT and MRT lines via a covered pedestrian linkway.", eat: "Intermark Mall dining options and surrounding local food courts.", travel: "Conveniently located near Kuala Lumpur's financial center and embassies." },
-                              "PY36": { lines: "MRT Putrajaya Line", extra: "Putrajaya Sentral is the terminal station for the Putrajaya MRT line, integrated with the ERL Airport Transit line.", eat: "Food court and quick-service dining inside the transport terminal building.", travel: "Take NadiPutra feeder buses to Prime Minister's office, Pink Mosque, and administrative offices." },
-                              // Monorail
-                              "MR1": { lines: "KL Monorail & LRT/MRT/ERL Lines", extra: "KL Sentral Monorail station is located outside the main station building. Connects to LRT via Nu Sentral Mall.", eat: "Nu Sentral food brands and Brickfields street food.", travel: "Walk through Nu Sentral level 1 and 2 to access the main KL Sentral transit hall." },
-                              "MR4": { lines: "KL Monorail & LRT Ampang/Sri Petaling Lines", extra: "Hang Tuah is an interchange station. It is directly connected to the Mitsui Shopping Park LaLaport BBCC.", eat: "Japanese food street and trendy restaurants inside LaLaport mall.", travel: "Direct walking access to BBCC development and historic Stadium Merdeka." },
-                              // KTM
-                              "KC05": { lines: "KTM Komuter Line 1", extra: "Batu Caves is the northern terminus of the KTM line. Located right at the base of the holy Batu Caves hills.", eat: "Traditional Indian vegetarian restaurants serving banana leaf rice and snacks outside the temple.", travel: "2-minute walk to the entrance of the Batu Caves temple and the giant Lord Murugan statue." },
-                              "KB01": { lines: "KTM Komuter Line 1", extra: "Mid Valley station is directly linked to the Mid Valley Megamall and The Gardens Mall via a covered overhead walkway.", eat: "Hundreds of dining options inside Mid Valley Megamall and local food courts.", travel: "Walk straight from the platform into the mall entrance. Very convenient for shopping." },
-                              "KB04": { lines: "KTM, LRT Sri Petaling & ERL Lines", extra: "Bandar Tasik Selatan is a massive integrated hub. Interconnects KTM Komuter, LRT Sri Petaling Line, ERL, and TBS Terminal.", eat: "Food courts and fast food inside the Terminal Bersepadu Selatan (TBS).", travel: "TBS is the primary express bus terminal for southern-bound cross-state coaches (to Melaka, Johor, Singapore)." },
-                              // ERL
-                              "KE1": { lines: "ERL Airport Link & LRT/MRT Lines", extra: "KL Sentral Airport Hub features separate check-in counters and baggage facilities for travelers using the ERL Express trains.", eat: "Various international food chains and cafes inside the transit terminal.", travel: "Board the high-speed airport express for a direct 28-minute trip to KLIA Airport." }
-                            };
-
-                            if (detailsMap[code]) return detailsMap[code];
-
-                            // Generic fallback description based on line code
-                            let lineName = "Kuala Lumpur Transit Network";
-                            if (code.startsWith("KJ")) lineName = "LRT Kelana Jaya Line";
-                            else if (code.startsWith("KG")) lineName = "MRT Kajang Line";
-                            else if (code.startsWith("PY")) lineName = "MRT Putrajaya Line";
-                            else if (code.startsWith("MR")) lineName = "KL Monorail Line";
-                            else if (code.startsWith("KC") || code.startsWith("KA") || code.startsWith("KB")) lineName = "KTM Komuter Line";
-                            else if (code.startsWith("KE")) lineName = "ERL Airport Rail Link";
-
-                            return {
-                              lines: lineName,
-                              extra: `Station ${code} is a key stop along the ${lineName}, serving local commuters and tourists daily.`,
-                              eat: `Local dining spots, Mamak shops, or light snack kiosks are available nearby.`,
-                              travel: `Feeder bus transit points, e-hailing waiting zones, or taxi stands are located outside this station's primary street exits.`
-                            };
-                          };
-
-                          const activeInfo = getStationDetail(selectedStationCode);
-                          
-                          // Determine station name from current selected line list or fall back
-                          const getSelectedStationName = () => {
-                            const activeLineCode = selectedNetworkLine;
-                            const findInList = (list: any[]) => {
-                              const found = list.find(s => s.code === selectedStationCode);
-                              return found ? found.name : null;
-                            };
-                            
-                            let name = "";
-                            if (activeLineCode === "LRT 5") name = findInList([
-                              { code: "KJ1", name: "Gombak" }, { code: "KJ2", name: "Taman Melati" }, { code: "KJ3", name: "Wangsa Maju" }, { code: "KJ4", name: "Sri Rampai" }, { code: "KJ5", name: "Setiawangsa" }, { code: "KJ6", name: "Jelatek" }, { code: "KJ7", name: "Dato' Keramat" }, { code: "KJ8", name: "Damai" }, { code: "KJ9", name: "Ampang Park" }, { code: "KJ10", name: "KLCC" }, { code: "KJ11", name: "Kampung Baru" }, { code: "KJ12", name: "Dang Wangi" }, { code: "KJ13", name: "Masjid Jamek" }, { code: "KJ14", name: "Pasar Seni" }, { code: "KJ15", name: "KL Sentral" }, { code: "KJ16", name: "Bangsar" }, { code: "KJ17", name: "Abdullah Hukum" }, { code: "KJ18", name: "Kerinchi" }, { code: "KJ19", name: "Universiti" }, { code: "KJ20", name: "Taman Jaya" }, { code: "KJ21", name: "Asia Jaya" }, { code: "KJ22", name: "Taman Paramount" }, { code: "KJ23", name: "Taman Bahagia" }, { code: "KJ24", name: "Kelana Jaya" }, { code: "KJ25", name: "Lembah Subang" }, { code: "KJ26", name: "Ara Damansara" }, { code: "KJ27", name: "Glenmarie" }, { code: "KJ28", name: "Subang Jaya" }, { code: "KJ29", name: "SS15" }, { code: "KJ30", name: "SS18" }, { code: "KJ31", name: "USJ 7" }, { code: "KJ32", name: "Taipan" }, { code: "KJ33", name: "Wawasan" }, { code: "KJ34", name: "USJ 21" }, { code: "KJ35", name: "Alam Megah" }, { code: "KJ36", name: "Subang Alam" }, { code: "KJ37", name: "Putra Heights" }
-                            ]) || "";
-                            else if (activeLineCode === "MRT 9") name = findInList([
-                              { code: "KG04", name: "Kwasa Damansara" }, { code: "KG05", name: "Kwasa Sentral" }, { code: "KG06", name: "Kota Damansara" }, { code: "KG07", name: "Surian" }, { code: "KG08", name: "Mutiara Damansara" }, { code: "KG09", name: "Bandar Utama" }, { code: "KG10", name: "TTDI" }, { code: "KG12", name: "Phileo Damansara" }, { code: "KG13", name: "Pusat Bandar Damansara" }, { code: "KG14", name: "Semantan" }, { code: "KG15", name: "Muzium Negara" }, { code: "KG16", name: "Pasar Seni" }, { code: "KG17", name: "Merdeka" }, { code: "KG18A", name: "Bukit Bintang" }, { code: "KG20", name: "Tun Razak Exchange (TRX)" }, { code: "KG21", name: "Cochrane" }, { code: "KG22", name: "Maluri" }, { code: "KG23", name: "Taman Pertama" }, { code: "KG24", name: "Taman Midah" }, { code: "KG25", name: "Taman Mutiara" }, { code: "KG26", name: "Taman Connaught" }, { code: "KG27", name: "Taman Suntex" }, { code: "KG28", name: "Sri Raya" }, { code: "KG29", name: "Bandar Tun Hussein Onn" }, { code: "KG30", name: "Batu 11 Cheras" }, { code: "KG31", name: "Bukit Dukung" }, { code: "KG32", name: "Sungai Jernih" }, { code: "KG33", name: "Stadium Kajang" }, { code: "KG34", name: "Sungai Kantan" }, { code: "KG35", name: "Kajang" }
-                            ]) || "";
-                            else if (activeLineCode === "MRT 12") name = findInList([
-                              { code: "PY01", name: "Kwasa Damansara" }, { code: "PY02", name: "Kampung Selamat" }, { code: "PY03", name: "Sungai Buloh" }, { code: "PY04", name: "Damansara Damai" }, { code: "PY05", name: "Sri Damansara Barat" }, { code: "PY06", name: "Sri Damansara Sentral" }, { code: "PY07", name: "Sri Damansara Timur" }, { code: "PY08", name: "Metro Prima" }, { code: "PY09", name: "Kepong Baru" }, { code: "PY10", name: "Jinjang" }, { code: "PY11", name: "Sri Delima" }, { code: "PY12", name: "Kampung Batu" }, { code: "PY13", name: "Kentonmen" }, { code: "PY14", name: "Jalan Ipoh" }, { code: "PY15", name: "Sentul Barat" }, { code: "PY16", name: "Titiwangsa" }, { code: "PY17", name: "Hospital HKL" }, { code: "PY18", name: "Raja Uda" }, { code: "PY19", name: "Ampang Park" }, { code: "PY20", name: "Persiaran KLCC" }, { code: "PY21", name: "Conlay" }, { code: "PY22", name: "Tun Razak Exchange (TRX)" }, { code: "PY23", name: "Chan Sow Lin" }, { code: "PY24", name: "Kuchai" }, { code: "PY25", name: "Taman Naga Emas" }, { code: "PY26", name: "Sungai Besi" }, { code: "PY27", name: "Serdang Raya Utara" }, { code: "PY28", name: "Serdang Raya Selatan" }, { code: "PY29", name: "Serdang Jaya" }, { code: "PY30", name: "UPM" }, { code: "PY31", name: "Taman Equine" }, { code: "PY32", name: "Putra Permai" }, { code: "PY33", name: "16 Sierra" }, { code: "PY34", name: "Cyberjaya Utara" }, { code: "PY35", name: "Cyberjaya City Centre" }, { code: "PY36", name: "Putrajaya Sentral" }
-                            ]) || "";
-                            else if (activeLineCode === "Monorail 8") name = findInList([
-                              { code: "MR1", name: "KL Sentral Monorail" }, { code: "MR2", name: "Tun Sambanthan" }, { code: "MR3", name: "Maharajalela" }, { code: "MR4", name: "Hang Tuah" }, { code: "MR5", name: "Imbi" }, { code: "MR6", name: "Bukit Bintang" }, { code: "MR7", name: "Raja Chulan" }, { code: "MR8", name: "Bukit Nanas" }, { code: "MR9", name: "Medan Tuanku" }, { code: "MR10", name: "Chow Kit" }, { code: "MR11", name: "Titiwangsa" }
-                            ]) || "";
-                            else if (activeLineCode === "KTM 1") name = findInList([
-                              { code: "KC05", name: "Batu Caves" }, { code: "KC04", name: "Taman Wahyu" }, { code: "KC03", name: "Kampung Batu" }, { code: "KC02", name: "Batu Kentonmen" }, { code: "KC01", name: "Sentul" }, { code: "KA04", name: "Putra" }, { code: "KA03", name: "Bank Negara" }, { code: "KA02", name: "Kuala Lumpur (Old)" }, { code: "KA01", name: "KL Sentral" }, { code: "KB01", name: "Mid Valley" }, { code: "KB02", name: "Seputeh" }, { code: "KB03", name: "Salak Selatan" }, { code: "KB04", name: "Bandar Tasik Selatan" }, { code: "KB05", name: "Serdang" }, { code: "KB06", name: "Kajang" }, { code: "KB07", name: "UKM" }, { code: "KB08", name: "Bangi" }, { code: "KB09", name: "Batang Benar" }, { code: "KB10", name: "Nilai" }, { code: "KB11", name: "Labu" }, { code: "KB12", name: "Tiroi" }, { code: "KB13", name: "Seremban" }, { code: "KB14", name: "Senawang" }, { code: "KB15", name: "Sungai Gadut" }, { code: "KB16", name: "Rembau" }, { code: "KB17", name: "Pulau Sebang / Tampin" }
-                            ]) || "";
-                            else name = findInList([
-                              { code: "KE1", name: "KL Sentral Airport Hub" }, { code: "KE2", name: "Bandar Tasik Selatan (TBS)" }, { code: "KE3", name: "Putrajaya Sentral" }, { code: "KE4", name: "Salak Tinggi" }, { code: "KE5", name: "KLIA Terminal 1" }, { code: "KE6", name: "KLIA Terminal 2" }
-                            ]) || "";
-                            
-                            return name || selectedStationCode;
-                          };
-                          
-                          const stationName = getSelectedStationName();
-                          return (
-                            <div className="space-y-3.5 mt-2 animate-fade-in text-xs">
-                              <div>
-                                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 dark:text-zinc-500">Active Station Selected</span>
-                                <h4 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white -mt-1">{stationName}</h4>
-                                <span className="inline-block mt-1 font-mono text-[10px] font-semibold bg-sky-50 dark:bg-zinc-800 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded">
-                                  {activeInfo.lines}
-                                </span>
-                              </div>
-
-                              <div className="p-3 bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-xl space-y-2 text-[11px] text-slate-600 dark:text-zinc-300 leading-relaxed">
-                                <p><strong>ℹ️ Station Context:</strong> {activeInfo.extra}</p>
-                                <p><strong>🍲 Dining Scene:</strong> {activeInfo.eat}</p>
-                                <p><strong>🗺️ Tourist Guide:</strong> {activeInfo.travel}</p>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <div className="overflow-y-auto max-h-[500px]">
+                          <div className="relative pl-10 py-3 pr-3 space-y-0">
+                            <div className="absolute left-4 top-4 bottom-4 w-1.5 rounded" style={{ backgroundColor: color, opacity: 0.2 }} />
+                            {stationList.map((st, idx) => {
+                              const eta = getEta(idx);
+                              const isArriving = eta.label === "ARRIVING";
+                              return (
+                                <div
+                                  key={st.code}
+                                  ref={isArriving ? (el) => { if (el) setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 100); } : undefined}
+                                  className={`relative flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer transition-all border ${
+                                    selectedStationCode === st.code
+                                      ? "bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
+                                      : eta.dimmed
+                                      ? "border-transparent opacity-35 hover:opacity-60"
+                                      : "border-transparent hover:bg-slate-50 dark:hover:bg-zinc-900"
+                                  }`}
+                                  onClick={() => setSelectedStationCode(st.code)}
+                                >
+                                  <div className="absolute -left-[29px] w-4 h-4 rounded-full border-[3px] border-white dark:border-zinc-800 transition-all shrink-0"
+                                    style={{ backgroundColor: isArriving ? color : eta.dimmed ? "#94a3b8" : "#cbd5e1", transform: isArriving ? "scale(1.3)" : "scale(1)" }} />
+                                  <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded text-white shrink-0" style={{ backgroundColor: color }}>{st.code}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <span className={`font-bold text-xs text-slate-800 dark:text-slate-100 ${eta.dimmed ? "line-through" : ""}`}>{st.name}</span>
+                                      {st.isInterchange && <span className="text-[8px] font-bold bg-sky-100 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 px-1 py-0.5 rounded">↔</span>}
+                                    </div>
+                                    {st.isInterchange && st.transfers.length > 0 && (
+                                      <div className="flex gap-0.5 mt-0.5 flex-wrap">
+                                        {st.transfers.slice(0, 4).map(tr => (
+                                          <span key={tr} className="text-[8px] font-mono font-bold bg-slate-100 dark:bg-zinc-700 text-slate-500 dark:text-zinc-300 px-1 rounded">{tr}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {(st as any).tip && (isArriving || selectedStationCode === st.code) && (
+                                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5 leading-snug">💡 {(st as any).tip}</p>
+                                    )}
+                                  </div>
+                                  <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${eta.cls}`}>{eta.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="px-4 py-2 border-t border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500">Green = Arriving · Amber = Next · Grey = Departed · Ask AI for platform details</span>
+                        </div>
                       </div>
-
-                      <div className="mt-4 p-3 bg-blue-50/60 border border-blue-100 dark:bg-zinc-900 dark:border-zinc-800 rounded-xl leading-relaxed shrink-0">
-                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Interchange Reminder</p>
-                        <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-0.5">
-                          At combined transit stations (e.g. Majid Jamek and Pasar Seni), follow the colorful floor stickers on the pedestrian ground to swap lines without tapping out.
-                        </p>
-                      </div>
-                    </div>
-
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1463,26 +1423,29 @@ export default function App() {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {TRANSIT_TIPS[lang]?.map((tip, idx) => (
-                      <div key={idx} className="p-4 bg-emerald-50/60 dark:bg-emerald-950/15 border border-emerald-150 dark:border-emerald-900/60 rounded-2xl flex gap-3.5 items-start transition hover:translate-y-[-1px] hover:shadow-sm">
-                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 shrink-0 font-bold">
-                          💡
-                        </div>
-                        <div className="space-y-1.5 min-w-0">
-                          <h4 className="font-extrabold text-slate-800 dark:text-white text-xs sm:text-sm uppercase tracking-wider">
-                            {tip.title}
-                          </h4>
-                          <div>
-                            <span className="text-[10px] text-emerald-700 dark:text-emerald-450 font-bold">💡 What you should know:</span>
-                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed -mt-0.5">{tip.warning}</p>
+                    {TRANSIT_TIPS[lang]?.map((tip, idx) => {
+                      const labels = tipLabels[lang] || tipLabels["en"];
+                      return (
+                        <div key={idx} className="p-4 bg-emerald-50/60 dark:bg-emerald-950/15 border border-emerald-150 dark:border-emerald-900/60 rounded-2xl flex gap-3.5 items-start transition hover:translate-y-[-1px] hover:shadow-sm min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 shrink-0 font-bold">
+                            💡
                           </div>
-                          <div>
-                            <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-bold">⭐ Guest Advice Guideline:</span>
-                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed -mt-0.5 font-medium">{tip.solution}</p>
+                          <div className="space-y-1.5 min-w-0 flex-1">
+                            <h4 className="font-extrabold text-slate-800 dark:text-white text-xs sm:text-sm uppercase tracking-wider break-words leading-tight">
+                              {tip.title}
+                            </h4>
+                            <div className="min-w-0">
+                              <span className="text-[10px] text-emerald-700 dark:text-emerald-450 font-bold block mb-0.5 break-words">{labels.know}</span>
+                              <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed break-words">{tip.warning}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-bold block mb-0.5 break-words">{labels.advice}</span>
+                              <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed font-medium break-words">{tip.solution}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1500,20 +1463,23 @@ export default function App() {
                   {/* 4A. Travel Type Category badging */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
                     {[
-                      { icon: <Train size={15} />, text: "LRT / MRT lines", desc: "Urban Heavy Rail", color: "text-rose-500 bg-rose-50" },
-                      { icon: <Train size={15} />, text: "Monorail Line", desc: "Central Elevated", color: "text-amber-500 bg-amber-50" },
-                      { icon: <Train size={15} />, text: "KTM Railways", desc: "Suburban Regional", color: "text-blue-500 bg-blue-50" },
-                      { icon: <Train size={15} />, text: "Airport Rails", desc: "Direct Gateway Link", color: "text-purple-500 bg-purple-50" },
-                      { icon: <Bus size={15} />, text: "BRT Sunway", desc: "Electric Elevated Bus", color: "text-emerald-500 bg-emerald-50" }
-                    ].map((cat, idx) => (
-                      <div key={idx} className={`p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800 ${cat.color} dark:bg-zinc-800/40 flex flex-col justify-between h-[64px]`}>
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[11px]">{cat.text}</span>
-                          {cat.icon}
+                      { icon: <Train size={15} />, color: "text-rose-500 bg-rose-50" },
+                      { icon: <Train size={15} />, color: "text-amber-500 bg-amber-50" },
+                      { icon: <Train size={15} />, color: "text-blue-500 bg-blue-50" },
+                      { icon: <Train size={15} />, color: "text-purple-500 bg-purple-50" },
+                      { icon: <Bus size={15} />, color: "text-emerald-500 bg-emerald-50" }
+                    ].map((cat, idx) => {
+                      const localized = travelCategories[lang][idx] || travelCategories["en"][idx];
+                      return (
+                        <div key={idx} className={`p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800 ${cat.color} dark:bg-zinc-800/40 flex flex-col justify-between min-h-[72px] h-auto`}>
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-[11px] leading-tight break-words">{localized.text}</span>
+                            <div className="shrink-0">{cat.icon}</div>
+                          </div>
+                          <span className="text-[9px] text-slate-400 dark:text-zinc-500 leading-normal break-words mt-1">{localized.desc}</span>
                         </div>
-                        <span className="text-[9px] text-slate-400 dark:text-zinc-500">{cat.desc}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* 4B. Fare Ranges Table */}
@@ -1572,68 +1538,29 @@ export default function App() {
       {/* ==========================================
           MOBILE BOTTOM NAVIGATION TAB BAR
           ========================================== */}
-      <nav id="mobile-tab-navigation" className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-zinc-800 border-t border-slate-200 dark:border-zinc-700 h-[68px] flex items-center justify-around px-2 py-1 z-40 shadow-inner">
-        
-        <button
-          onClick={() => setActiveTab("arrivals")}
-          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
-            activeTab === "arrivals"
-              ? "text-malaysia-blue dark:text-blue-400 font-bold"
-              : "text-slate-400 dark:text-zinc-500"
-          }`}
-        >
-          <Clock size={18} />
-          <span className="text-[10px] uppercase font-bold mt-1">Arrivals</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("planner")}
-          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
-            activeTab === "planner"
-              ? "text-malaysia-blue dark:text-blue-400 font-bold"
-              : "text-slate-400 dark:text-zinc-500"
-          }`}
-        >
-          <Compass size={18} />
-          <span className="text-[10px] uppercase font-bold mt-1">Planner</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("network")}
-          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
-            activeTab === "network"
-              ? "text-malaysia-blue dark:text-blue-400 font-bold"
-              : "text-slate-400 dark:text-zinc-500"
-          }`}
-        >
-          <Network size={18} />
-          <span className="text-[10px] uppercase font-bold mt-1">Routes</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("ticketing")}
-          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
-            activeTab === "ticketing"
-              ? "text-malaysia-blue dark:text-blue-400 font-bold"
-              : "text-slate-400 dark:text-zinc-500"
-          }`}
-        >
-          <Ticket size={18} />
-          <span className="text-[10px] uppercase font-bold mt-1">Passes</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("maps")}
-          className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center flex-1 min-h-[44px] ${
-            activeTab === "maps"
-              ? "text-malaysia-blue dark:text-blue-400 font-bold"
-              : "text-slate-400 dark:text-zinc-500"
-          }`}
-        >
-          <Map size={18} />
-          <span className="text-[10px] uppercase font-bold mt-1">Maps</span>
-        </button>
-
+      <nav id="mobile-tab-navigation" className="md:hidden fixed bottom-0 left-0 w-full bg-white dark:bg-zinc-800 border-t border-slate-200 dark:border-zinc-700 h-[68px] flex items-center gap-1 overflow-x-auto scrollbar-none px-4 py-1 z-40 shadow-inner">
+        {[
+          { id: "arrivals", label: t.arrivalsTab, icon: <Clock size={18} /> },
+          { id: "planner", label: t.plannerTab, icon: <Compass size={18} /> },
+          { id: "network", label: t.routesTab, icon: <Network size={18} /> },
+          { id: "ticketing", label: t.passesTab, icon: <Ticket size={18} /> },
+          { id: "maps", label: t.mapsTab, icon: <Map size={18} /> },
+          { id: "fares", label: t.faresTab, icon: <TrendingUp size={18} /> },
+          { id: "tips", label: t.tipsTab, icon: <AlertCircle size={18} /> }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as TabId)}
+            className={`flex flex-col items-center justify-center p-1.5 rounded-xl text-center min-w-[72px] shrink-0 min-h-[44px] ${
+              activeTab === tab.id
+                ? "text-malaysia-blue dark:text-blue-400 font-bold"
+                : "text-slate-400 dark:text-zinc-500"
+            }`}
+          >
+            {tab.icon}
+            <span className="text-[10px] uppercase font-bold mt-1 tracking-tight">{tab.label}</span>
+          </button>
+        ))}
       </nav>
 
       {/* ==========================================

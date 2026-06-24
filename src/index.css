@@ -11,11 +11,19 @@
   --color-malaysia-red: #CC0001;
 }
 
+/* ─── Tailwind v4: Dark Mode Variant ─────────────────────────────────────────
+   REQUIRED for dark: utilities to work. Without this, Tailwind v4 compiles
+   dark: classes but they have no CSS selector to match — they silently fail.
+   This must use @custom-variant, NOT tailwind.config.js (removed in v4).
+────────────────────────────────────────────────────────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Color scheme for native browser controls (scrollbars, inputs, etc.) ─── */
 :root {
   color-scheme: light;
 }
 
-:root.dark {
+html.dark {
   color-scheme: dark;
 }
 
@@ -25,19 +33,10 @@ body {
   color: #1e293b;
 }
 
-.dark body {
-  background-color: #121212;
-  color: #e2e8f0;
-}
-
 /* Style definitions for SVG mall directory blueprints */
 .map-blueprint-grid {
   background-image: radial-gradient(circle, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
   background-size: 20px 20px;
-}
-
-.dark .map-blueprint-grid {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
 .map-svg-room {
@@ -48,10 +47,6 @@ body {
 .map-svg-room:hover {
   filter: brightness(0.95);
   stroke-width: 1.5;
-}
-
-.dark .map-svg-room:hover {
-  filter: brightness(1.1);
 }
 
 @keyframes map-svg-pulse {
@@ -85,8 +80,33 @@ body {
   border-radius: 4px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
 
+/* ─── Tab label overflow containment ──────────────────────────────────────── */
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80px;
+}
+
+@media (min-width: 768px) {
+  .tab-label {
+    max-width: 100px;
+  }
+}
+
+/* ─── Rolling ticker animation ─────────────────────────────────────────────── */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
