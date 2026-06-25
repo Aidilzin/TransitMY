@@ -148,151 +148,102 @@ function detectLanguage(messages: any[]): "en" | "bm" | "zh" | "ta" {
   return "en";
 }
 
-function getSpecificInsights(text: string, lang: "en" | "bm" | "zh" | "ta"): string {
-  const query = text.toLowerCase();
-  
-  if (lang === "zh") {
-    if (query.includes("ticket") || query.includes("token") || query.includes("票") || query.includes("买") || query.includes("支付") || query.includes("card") || query.includes("tng") || query.includes("touch")) {
-      return `\n\n### 💡 您问到了关于【车票/支付】：
-*   若您只单次搭乘，最简便的方法是使用**自动售票机**购买蓝色单程代币。售票机接受 1元、5元纸币和硬币。
-*   极力推荐在站内柜台购买 **Touch 'n Go 实体卡**，既省去了排队买票的麻烦，乘车还能享受优惠！请确保内有最少 RM10。`;
-    }
-    if (query.includes("sentral") || query.includes("hub") || query.includes("中央") || query.includes("枢纽")) {
-      return `\n\n### 💡 您问到了关于【KL Sentral 中央车站】：
-*   KL Sentral 是全马最大的枢纽。LRT（5号线）、MRT 捷运（9号线）和 KTM 火车都在此交汇。
-*   **注意**：吉隆坡单轨 (KL Monorail) 车站名为 "KL Sentral Monorail"，该站与主枢纽大楼不直接相连。您必须过十字路口或通过 Nu Sentral 购物中心步行约 5 分钟换乘。`;
-    }
-    if (query.includes("masjid jamek") || query.includes("jamek") || query.includes("占美")) {
-      return `\n\n### 💡 您问到了关于【Masjid Jamek 站】：
-*   该站是 LRT 格拉那再也线（红/5号线）与 LRT 安邦线/大城堡线（橘/3、4号线）的交汇枢纽。
-*   两条换乘轨道高低错落，站内设有跨线扶梯，换乘仅需步行 1-2 分钟，**无需出站刷卡**。`;
-    }
-    if (query.includes("operating") || query.includes("hour") || query.includes("time") || query.includes("time table") || query.includes("timetable") || query.includes("时间") || query.includes("首班") || query.includes("末班") || query.includes("几点")) {
-      return `\n\n### 💡 您问到了关于【运营时间与时刻表】：
-*   全网轻快铁及捷运首班车于早上 **6:00 AM** 发车。
-*   末班车通常在晚上 **11:30 PM - 12:00 AM** 之间发车。建议在主页顶部的 **实时列车到站倒计时面板** 查看具体车次到站，信息直接对接 RapidKL 实时传输！`;
-    }
-  } else if (lang === "bm") {
-    if (query.includes("ticket") || query.includes("token") || query.includes("harga") || query.includes("tambang") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("beli")) {
-      return `\n\n### 💡 Soalan anda mengenai 【Tiket & Tambang】：
-*   Untuk satu perjalanan, anda boleh beli **Token Laluan Biru** di Mesin Jualan Tiket (TVM). Ia menerima RM1, RM5 dan duit syiling.
-*   Kad **Touch 'n Go** amat dinasihatkan jika anda mahu perjalanan yang lancar tanpa beratur panjang. Pastikan baki kad tidak kurang dari RM10 untuk melepasi kaunter.`;
-    }
-    if (query.includes("sentral") || query.includes("hub") || query.includes("pusat")) {
-      return `\n\n### 💡 Soalan anda mengenai 【KL Sentral】：
-*   KL Sentral ialah hub transit utama rel di Selangor dan Kuala Lumpur.
-*   **Awas**: Stesen KL Monorail KL Sentral terletak di luar bangunan utama. Anda perlu berjalan kaki selama 5 minit merentasi dalam kompleks membeli-belah Nu Sentral untuk membuat pertukaran.`;
-    }
-    if (query.includes("masjid jamek") || query.includes("jamek")) {
-      return `\n\n### 💡 Soalan anda mengenai 【Stesen Masjid Jamek】：
-*   Stesen ini menghubungkan LRT Laluan Kelana Jaya (Laluan 5) dengan LRT Laluan Ampang & Sri Petaling (Laluan 3 & 4).
-*   Pertukaran adalah percuma dan boleh dibuat di dalam bangunan tanpa perlu tap keluar atau tap masuk semula.`;
-    }
-    if (query.includes("operating") || query.includes("hour") || query.includes("time") || query.includes("timetable") || query.includes("pukul") || query.includes("jam") || query.includes("jadual")) {
-      return `\n\n### 💡 Soalan anda mengenai 【Waktu Operasi & Jadual Rel】：
-*   Semua perkhidmatan tren mula beroperasi seawal jam **6:00 Pagi** setiap hari.
-*   Tren terakhir bertolak antara jam **11:30 Malam hingga 12:00 Tengah Malam**. Sila semak tab **Jadual Waktu** (Timetable) di halaman utama kami untuk melihat kemas kini masa nyata RapidKL.`;
-    }
-  } else if (lang === "ta") {
-    if (query.includes("ticket") || query.includes("token") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("pay") || query.includes("கட்டணம்") || query.includes("டிக்கெட்")) {
-      return `\n\n### 💡 【டிக்கெட்டுகள் & கட்டணங்கள்】 பற்றிய தகவல்:
-*   ஒரு முறை பயணிக்க நீல நிற **டோக்கன்** நாணயங்களை நிலையங்களில் வாங்கலாம்.
-*   டச் என் கோ கார்டு வாங்குவதன் மூலம் நெரிசல் இல்லாமல் வேகமாக பயணிக்கலாம்.`;
-    }
-  } else {
-    if (query.includes("ticket") || query.includes("token") || query.includes("fare") || query.includes("price") || query.includes("card") || query.includes("tng") || query.includes("touch") || query.includes("buy")) {
-      return `\n\n### 💡 Your query about 【Ticketing & Fares】：
-*   For single rides, buy a blue **Single-Journey Token** at English-supported Transit Vending Machines (TVMs) using RM1/RM5 notes or coins.
-*   We strongly advocate getting a **Touch 'n Go Card** at service offices. This bypasses high queues and gives discounted rates. Remember: TnG gates require a **minimum balance of RM10.00** to open.`;
-    }
-    if (query.includes("sentral") || query.includes("hub") || query.includes("central")) {
-      return `\n\n### 💡 Your query about 【KL Sentral Hub】：
-*   KL Sentral connects almost all lines (LRT, MRT, KTM, ERL) smoothly inside one layout.
-*   **Pro-Tip**: The KL Monorail station is actually across the street. You must walk for 5 minutes through the *Nu Sentral* mall inside the elevated pedestrian bridge to swap lines.`;
-    }
-    if (query.includes("masjid jamek") || query.includes("jamek")) {
-      return `\n\n### 💡 Your query about 【Masjid Jamek Station Interchanging】：
-*   It is an awesome integration station between LRT Kelana Jaya Line (Red/Line 5) and LRT Ampang/Sri Petaling lines (Orange/Lines 3 and 4).
-*   You **do not need to tap out** of gates to change. Simply walk across the overhead pedestrian bridge / escalators.`;
-    }
-  }
-
-  return "";
-}
+// ── Route knowledge base for offline client fallback ─────────────────────────
+const CLIENT_ROUTE_KB: Array<{ keys: string[]; answer: string }> = [
+  {
+    keys: ["seremban", "nilai", "pulau sebang", "tampin"],
+    answer: `### \u{1F686} KL Sentral \u2192 Seremban (KTM Komuter)\n\n1. Go to the **KTM Komuter** section inside KL Sentral (lower level, follow blue KTM signs).\n2. **Buy a ticket** at the counter or TVM \u2014 Touch 'n Go is accepted.\n3. Board the **KTM Seremban Line** (brown / Line 2) towards **Pulau Sebang/Tampin**.\n4. Seremban is a major stop \u2014 journey takes about **1 h 30 min \u2013 2 h**.\n5. **Tap out** at Seremban gate when you arrive.\n\n> \u26A0\uFE0F KTM runs less frequently than LRT/MRT \u2014 check the schedule first. Operating hours: ~6 AM \u2013 midnight.`
+  },
+  {
+    keys: ["klcc", "twin tower", "petronas tower", "suria klcc"],
+    answer: `### \u{1F3D9}\uFE0F Getting to KLCC / Petronas Twin Towers\n\n1. Take the **LRT Kelana Jaya Line (Red / Line 5)**.\n2. Board any train towards **Gombak** direction.\n3. Alight at **KLCC station** (2 stops from Masjid Jamek, 3 stops from KL Sentral).\n4. Exit via **Exit A** \u2014 the towers are directly above the station.\n\n> \u{1F4A1} Touch 'n Go or single-journey token both work. RM2\u20134 depending on origin.`
+  },
+  {
+    keys: ["bukit bintang", "bintang walk", "pavilion", "bb plaza"],
+    answer: `### \u{1F6CD}\uFE0F Getting to Bukit Bintang / Pavilion\n\n**Option 1 \u2014 MRT (Recommended):**\n1. Take the **MRT Kajang Line (Green / Line 9)**.\n2. Alight at **Bukit Bintang MRT** station \u2014 connected underground to Pavilion.\n\n**Option 2 \u2014 KL Monorail:**\n1. Take the **KL Monorail (Orange / Line 8)**.\n2. Alight at **Bukit Bintang Monorail** station.\n\n> \u{1F4A1} Both options are valid. MRT is faster from most interchange stations.`
+  },
+  {
+    keys: ["klia", "airport", "terminal", "klia2", "flight", "klia transit", "klia ekspres"],
+    answer: `### \u2708\uFE0F KL Sentral \u2192 KLIA / KLIA2 (ERL)\n\n1. Go to the **ERL (Express Rail Link)** counter at KL Sentral basement.\n2. **KLIA Ekspres** \u2014 non-stop, takes **28 minutes**, ~RM55.\n3. **KLIA Transit** \u2014 stops at Salak Tinggi, takes ~35 min, cheaper.\n4. For **KLIA2** (AirAsia terminal): take KLIA Transit or the free KLIA2 shuttle bus from KLIA.\n\n> \u23F0 ERL runs every 15\u201320 min. First train ~5 AM, last ~1 AM.`
+  },
+  {
+    keys: ["batu cave", "batu caves"],
+    answer: `### \u{1F54C} Getting to Batu Caves\n\n1. Take the **KTM Komuter Batu Caves Line** (grey).\n2. Board at **KL Sentral** or **Bank Negara** KTM station.\n3. Alight at the terminal stop: **Batu Caves** station.\n4. The famous staircase is right outside the station (~3-min walk).\n\n> \u23F0 Journey ~30\u201340 min from KL Sentral. Runs daily; last train around 10:30 PM.`
+  },
+  {
+    keys: ["port klang", "pelabuhan klang"],
+    answer: `### \u2693 KL Sentral \u2192 Port Klang (KTM Komuter)\n\n1. Go to the **KTM Komuter** section at KL Sentral.\n2. Take the **KTM Port Klang Line** (blue / Line 1) towards **Port Klang**.\n3. Journey takes approximately **1 hour**.\n4. **Tap out** at Port Klang station.\n\n> \u{1F4A1} Trains run every 20\u201330 min during peak hours.`
+  },
+  {
+    keys: ["midvalley", "mid valley", "the gardens mall"],
+    answer: `### \u{1F3EC} Getting to Mid Valley Megamall / The Gardens\n\n1. Take the **KTM Komuter** from KL Sentral (Port Klang Line or Seremban Line).\n2. Alight at **Mid Valley KTM** station \u2014 directly connected to Mid Valley Megamall via covered walkway.\n\n> \u23F1\uFE0F Only 1 stop from KL Sentral (~5 min). Very convenient!`
+  },
+  {
+    keys: ["sunway pyramid", "sunway lagoon", "subang jaya", "usj", "brt sunway"],
+    answer: `### \u{1F3D8}\uFE0F Getting to Subang Jaya / Sunway\n\n1. Take the **LRT Kelana Jaya Line (Red)** from KL Sentral or Masjid Jamek.\n2. Alight at **Subang Jaya** or **USJ 7** depending on your destination.\n\n**For BRT Sunway** (Sunway Pyramid, Sunway Lagoon):\n1. Ride LRT to **Subang Jaya** station.\n2. Transfer to **BRT Sunway Line** (green elevated bus) \u2014 free within BRT zone.\n\n> \u{1F4A1} Sunway Pyramid: LRT to SJ11 then BRT.`
+  },
+  {
+    keys: ["pasar seni", "central market", "chinatown", "petaling street"],
+    answer: `### \u{1F3EE} Getting to Pasar Seni / Central Market / Chinatown\n\n1. Take the **LRT Kelana Jaya Line (Red / Line 5)**.\n2. Alight at **Pasar Seni** station.\n3. Central Market is a 2-minute walk from Exit A.\n4. For Petaling Street (Chinatown), walk ~5 minutes south.\n\n> \u{1F4A1} Also reachable via LRT Ampang Line \u2014 same Pasar Seni station.`
+  },
+  {
+    keys: ["titiwangsa", "ampang jaya", "ampang park"],
+    answer: `### \u{1F306} Getting to Titiwangsa / Ampang\n\n**To Titiwangsa:**\n1. Take **LRT Kelana Jaya Line** or **KL Monorail** to **Titiwangsa** station.\n\n**To Ampang:**\n1. Take **LRT Ampang Line (Orange / Line 3)** from Masjid Jamek or Chan Sow Lin.\n\n> \u{1F4A1} Masjid Jamek is the best interchange between Kelana Jaya and Ampang lines.`
+  },
+  {
+    keys: ["gombak", "zoo negara", "zoo"],
+    answer: `### \u{1F981} Getting to Gombak / Zoo Negara\n\n1. Take the **LRT Kelana Jaya Line (Red / Line 5)** all the way to **Gombak** (terminal station).\n2. From Gombak LRT, take a **Rapid bus or Grab** to Zoo Negara (~10 min away).\n\n> \u23F1\uFE0F From KL Sentral to Gombak: ~40 minutes.`
+  },
+  {
+    keys: ["putrajaya", "cyberjaya", "putrajaya sentral"],
+    answer: `### \u{1F3DB}\uFE0F Getting to Putrajaya / Cyberjaya\n\n**Option 1 \u2014 MRT (Recommended):**\n1. Take the **MRT Putrajaya Line (Blue / Line 12)** from KL Sentral or Pasar Seni.\n2. Alight at **Putrajaya Sentral** or **Cyberjaya Utara** station.\n\n**Option 2 \u2014 ERL KLIA Transit:**\n1. Board KLIA Transit at KL Sentral.\n2. Alight at **Putrajaya & Cyberjaya** station (~20 min).\n\n> \u{1F4A1} MRT is cheaper; ERL is faster.`
+  },
+  {
+    keys: ["bangsar", "bangsar south"],
+    answer: `### \u{1F33F} Getting to Bangsar\n\n1. Take the **LRT Kelana Jaya Line (Red)** from KL Sentral.\n2. Alight at **Bangsar LRT** station (1 stop from KL Sentral).\n3. Walk or take a feeder bus into Bangsar village.\n\n> \u23F1\uFE0F Only ~3 minutes from KL Sentral!`
+  },
+  {
+    keys: ["chow kit", "chowkit"],
+    answer: `### \u{1F35C} Getting to Chow Kit\n\n1. Take the **KL Monorail (Orange / Line 8)** to **Chow Kit** station.\n2. The market is directly below the station.\n\n> \u{1F4A1} Alternatively, LRT Kelana Jaya Line to Dang Wangi then walk north.`
+  },
+  {
+    keys: ["operating hour", "opening hour", "when does", "what time", "first train", "last train", "schedule", "timetable"],
+    answer: `### \u23F0 Transit Operating Hours\n\n| Line | First Train | Last Train |\n|------|-------------|------------|\n| LRT Kelana Jaya | ~6:00 AM | ~11:50 PM |\n| LRT Ampang/Sri Petaling | ~6:00 AM | ~11:45 PM |\n| MRT Kajang | ~6:00 AM | ~11:50 PM |\n| MRT Putrajaya | ~6:00 AM | ~11:50 PM |\n| KL Monorail | ~6:00 AM | ~11:45 PM |\n| KTM Komuter | ~5:30 AM | ~11:00 PM |\n| ERL (KLIA) | ~5:00 AM | ~1:00 AM |\n\n> \u26A0\uFE0F Schedules may vary on public holidays. Check the Arrivals tab for live data.`
+  },
+  {
+    keys: ["ticket", "token", "fare", "price", "cost", "how much", "touch n go", "touch 'n go", "buy ticket"],
+    answer: `### \u{1F3AB} Ticketing & Fares\n\n*   **Touch 'n Go (TnG) Card** \u2014 Best option. Buy at major station counters (RM10 card + RM10 minimum load). Accepted on all rail lines.\n*   **Single-Journey Token** \u2014 Blue coin token from TVMs. Cash only (RM1/RM5 notes or coins).\n*   **MyCity Pass** \u2014 Tourist unlimited-ride pass: 1-Day (RM15) or 3-Day (RM25) for all LRT, MRT, Monorail lines.\n\n> \u{1F4A1} Gates require minimum **RM10.00 balance** on TnG to open. Top up at station kiosks or 7-Eleven.`
+  },
+  {
+    keys: ["bag", "luggage", "backpack", "baggage", "suitcase"],
+    answer: `### \u{1F392} Bags & Luggage on Transit\n\n*   **Backpacks/carry-on bags** \u2014 Allowed on all lines.\n*   **Large suitcases** \u2014 Allowed but must not block doors or aisles.\n*   **Oversized items** \u2014 May be refused; check with station staff.\n*   **Priority seats** \u2014 Reserved for elderly, disabled, and pregnant passengers.`
+  },
+];
 
 function getLocalFallbackText(messages: any[], lang: "en" | "bm" | "zh" | "ta"): string {
   const lastMessageText = messages[messages.length - 1]?.text || "";
-  const specificInsight = getSpecificInsights(lastMessageText, lang);
+  const query = lastMessageText.toLowerCase();
 
+  // Try route KB first — covers destinations and common topics
+  for (const entry of CLIENT_ROUTE_KB) {
+    if (entry.keys.some(k => query.includes(k))) {
+      return `*(Note: AI service temporarily unavailable. Showing cached transit knowledge.)*\n\n${entry.answer}`;
+    }
+  }
+
+  // Language-specific generic fallback when no route matched
   if (lang === "zh") {
-    return `*(提示：由于AI服务当前流量过大，TransitMY 已自动启动高效本地备用导乘模式，为您提供极速、精准的吉隆坡轨道交通指引。)*
-
-这里为您整理的吉隆坡轨道交通核心搭乘建议：
-
-### 🎫 车票选择与乘车支付
-*   **Touch 'n Go (一触即通卡):** 强烈推荐购买。进站时卡内须保持**最低 10.00 马币 (RM10.00)** 的余额。可于大站柜台购买。
-*   **单程硬币型代币 (Single-Journey Token):** 适合单次临时出行，可在轻轨各站内自动售票机上使用现金购买。
-*   **游客无限次通行卡:** 推荐购买 **MyCity 3日无限通票**（RM25），可在有效期内无限次搭乘 LRT, MRT, 和 Monorail。
-
-### 🗺️ 主要轨道交通线路
-*   **LRT 格拉那再也线 (红/5号线):** 格拉那再也至 Gombak 必乘线，途经双子塔（KLCC）、中央艺术坊（Pasar Seni）等。
-*   **MRT 加影线 (绿/9号线):** 途经武吉免登、国家博物馆、默迪卡。
-*   **KL Monorail 单轨电车 (橙/8号线):** 直达武吉免登金三角商业区。
-*   **重要换乘枢纽:**
-    *   **KL Sentral (中央车站):** 最大的换乘枢纽，但换乘**吉隆坡单轨 (Monorail)** 时需要步行约 5分钟穿越 *Nu Sentral* 购物商场。
-    *   **Masjid Jamek (占美清真寺站):** 5号线与3、4号线轻松在此站内进行跨线换乘，无需出站刷卡。${specificInsight || "\n\n如果您需要了解特定车站、换乘路线或购票细节，请随时发消息，我会即刻为您解答！"}`;
+    return `*(提示：AI服务暂时繁忙，TransitMY 已启动本地备用模式。)*\n\n### \u{1F5FA}\uFE0F 主要线路\n*   **LRT 格拉那再也线 (红/5):** Gombak \u2194 Putra Heights，途经KLCC、Pasar Seni\n*   **MRT 加影线 (绿/9):** 武吉免登、默迪卡\n*   **KTM:** 芙蓉、巴生港口、黑风洞\n*   **ERL:** KL Sentral \u2192 KLIA 仅28分钟\n\n**请重新告诉我您的出发地和目的地，我来帮您规划路线！**`;
   } else if (lang === "bm") {
-    return `*(Nota: Berikutan permintaan perkhidmatan yang amat tinggi, TransitMY kini beroperasi dalam mod sandaran tempatan. Saya sedia membantu anda dengan panduan perjalanan yang tepat dan pantas!)*
-
-Berikut adalah panduan penting transit rel Kuala Lumpur untuk memudahkan perjalanan anda:
-
-### 🎫 Pembelian Tiket & Kad Tambang
-*   **Kad Touch 'n Go (TnG):** Kaedah bayaran yang sangat disyorkan. Boleh dibeli di kaunter stesen utama. Pastikan **baki minimum ada RM10.00** sebelum masuk ke depoh pintu rel.
-*   **Token Perjalanan Tunggal (Single-Journey Token):** Sesuai untuk perjalanan sekali sahaja. Beli di mesin layan diri (TVM) di mana-mana stesen menggunakan wang kertas (RM1/RM5) atau syiling.
-*   **Pas MyCity:** Bagi pelancong, dapatkan **Pas MyCity 3-Hari** (RM25) atau **Pas 1-Hari** (RM15) untuk akses tanpa had ke rangkaian LRT, MRT, dan Monorel.
-
-### 🗺️ Laluan Jalur Rel & Hub Pertukaran Utama
-*   **LRT Laluan Kelana Jaya (Merah / Laluan 5):** Menghubungkan Gombak ke Putra Heights, melalui KLCC, Pasar Seni, dan KL Sentral.
-*   **MRT Laluan Kajang (Hijau / Laluan 9):** Melalui Muzium Negara, Bukit Bintang, dan Merdeka.
-*   **KL Monorel (Oren / Laluan 8):** Laluan khas melalui pusat segi tiga emas Bukit Bintang.
-*   **Hub Pertukaran:**
-    *   **KL Sentral:** Hub utama. Sila berjalan kaki sekitar 5 minit menerusi pusat beli-belah *Nu Sentral* untuk bertukar ke stesen KL Monorel.
-    *   **Masjid Jamek:** Hub pertukaran LRT Laluan Kelana Jaya & Ampang/Sri Petaling dengan lancar tanpa tap out.${specificInsight || "\n\nAdakah anda memerlukan bantuan mengenai stesen, laluan tertentu, atau kaedah kad? Sila tulis soalan anda segera!"}`;
+    return `*(Nota: Perkhidmatan AI sibuk. TransitMY menggunakan mod sandaran.)*\n\n### \u{1F5FA}\uFE0F Laluan Utama\n*   **LRT Kelana Jaya (Merah/5):** Gombak \u2194 Putra Heights via KLCC, Pasar Seni\n*   **MRT Kajang (Hijau/9):** Bukit Bintang, Merdeka\n*   **KTM:** Seremban, Port Klang, Batu Caves\n*   **ERL:** KL Sentral \u2192 KLIA dalam 28 minit\n\n**Sila beritahu saya dari mana anda bermula dan ke mana anda hendak pergi!**`;
   } else if (lang === "ta") {
-    return `*(அறிவிப்பு: AI சேவை தற்போது அதிக சுமையில் உள்ளதால், TransitMY உங்களுக்கு உதவ உள்ளூர் ஆஃப்லைன் பயன்முறையில் இயங்குகிறது. இருப்பினும் விரைவான வழிகாட்டலை நான் வழங்க முடியும்!)*
-
-கோலாலம்பூர் பொதுப் போக்குவரத்து அமைப்பின் முக்கிய விபரங்கள்:
-
-### 🎫 கட்டணம் மற்றும் டிக்கெட்டுகள:
-*   **டச் என் கோ (Touch 'n Go Card):** மிகவும் பரிந்துரைக்கப்படும் கட்டண அட்டை. கார்டில் நுழையும் போது குறைந்தபட்சம் **RM10.00 பேலன்ஸ்** இருக்க வேண்டும்.
-*   **சிங்கிள் டோக்கன் (Smart Token):** அனைத்து நிலையங்களிலும் உள்ள தானியங்கி இயந்திரங்கள் (TVM) மூலம் பணம் செலுத்தி வாங்கலாம்.
-*   **MyCity அன்லிமிடெட் பாஸ்:** சுற்றுலாப் பயணிகளுக்கு **3-நாள் பாஸ்** (RM25) அல்லது **1-நாள் பாஸ்** (RM15) மூலம் LRT, MRT, Monorail ஆகியவற்றில் வரம்பற்ற பயணம் செய்யலாம்.
-
-### 🗺️ முக்கிய ரயில் பாதைகள்:
-*   **LRT கெலானா ஜெயா பாதை (சிவப்பு / பாதை 5):** Gombak முதல் Putra Heights வரை. KLCC மற்றும் Pasar Seni வழியாகச் செல்கிறது.
-*   **MRT காஜாங் பாதை (பச்சை / பாதை 9):** Muzium Negara, Bukit Bintang வழியாகச் செல்கிறது.
-*   **முக்கிய சந்திப்புகள்:**
-    *   **KL Sentral (மைய நிலையம்):** அனைத்து ரயில்களும் சந்திக்கும் இடம். ஆனால் மோனோரயிலுக்கு மாற *Nu Sentral moolam* 5 நிமிடம் நடக்க வேண்டும்.
-    *   **Masjid Jamek:** LRT சிவப்புக் கோடு மற்றும் மஞ்சள் கோடுகளை இணைக்கும் மிக எளிய சந்திப்பு. ${specificInsight || ""}`;
+    return `*(அறிவிப்பு: AI சேவை இடைக்காலமாக இல்லை. உள்ளூர் தரவு பயன்படுத்தப்படுகிறது.)*\n\n### \u{1F5FA}\uFE0F முக்கிய பாதைகள்\n*   **LRT கெலானா ஜெயா (சிவப்பு/5):** KLCC, Pasar Seni வழியாக Gombak \u2194 Putra Heights\n*   **MRT காஜாங் (பச்சை/9):** Bukit Bintang, Merdeka\n*   **KTM:** Seremban, Batu Caves\n*   **ERL:** KL Sentral \u2192 KLIA 28 நிமிடம்\n\n**உங்கள் பயண தொடக்கம் மற்றும் இலக்கை சொல்லுங்கள்!**`;
   } else {
-    return `*(Notice: The TransitMY engine has entered high-performance local fallback mode to safeguard your journey. Rest assured, I can assist you with comprehensive public transit knowledge for Kuala Lumpur!)*
-
-Here is the essential quick-start guideline for navigating KL's public rail system:
-
-### 🎫 Smart Ticketing & Fares
-*   **Touch 'n Go (TnG) Card:** This is the absolute best way to travel. You can acquire a card at major station customer service counters. Keep in mind that gates require a **minimum balance of RM10.00** to enter.
-*   **Single-Journey Token:** For single trips, purchase a blue coin token at the Ticket Vending Machines (TVMs) at any station. They accept RM1/RM5 notes and coins.
-*   **MyCity Unlimited Passes:** If you're a tourist, ask for the **MyCity 3-Day Pass** (RM25) or **1-Day Pass** (RM15) for unlimited travel on all LRT, MRT, and Monorail lines.
-
-### 🗺️ Primary Transit Lines & Key Interchanges
-*   **LRT Kelana Jaya Line (Red / Line 5):** Reaches from Gombak to Putra Heights. Stops at central tourist sites like KLCC (Twin Towers) and Pasar Seni (Central Market).
-*   **MRT Kajang Line (Green / Line 9):** Serves Muzium Negara, Bukit Bintang, and Merdeka.
-*   **KL Monorail (Orange / Line 8):** Travels past Hang Tuah, Bukit Bintang, and Chow Kit.
-*   **Seamless Change Hubs:**
-    *   **KL Sentral Interchange:** KL's premier transport hub. Note that swapping to the **KL Monorail** requires crossing through the *Nu Sentral* shopping mall (a short, well-marked 5-minute walk).
-    *   **Masjid Jamek:** Direct physical walk between the Kelana Jaya Line and Ampang/Sri Petaling Lines. **Do not tap out** of the ticket gates — transfer internally!${specificInsight || "\n\nWould you like guidance regarding a specific route, station, or operation hours? Type your request below and I'll route you safely!"}`;
+    return `*(Note: AI service temporarily busy. Here's essential KL transit info.)*\n\n### \u{1F5FA}\uFE0F Key Lines\n*   **LRT Kelana Jaya (Red/5):** Gombak \u2194 Putra Heights via KLCC, Pasar Seni, KL Sentral\n*   **LRT Ampang/Sri Petaling (Orange/3&4):** Interchange at Masjid Jamek & Chan Sow Lin\n*   **MRT Kajang (Green/9):** Muzium Negara, Bukit Bintang, Merdeka\n*   **MRT Putrajaya (Blue/12):** KL Sentral to Putrajaya/Cyberjaya\n*   **KL Monorail (Orange/8):** Bukit Bintang, Chow Kit *(board at Nu Sentral side of KL Sentral)*\n*   **KTM Komuter:** Seremban, Port Klang, Batu Caves, Mid Valley\n*   **ERL:** KL Sentral \u2192 KLIA in 28 min (RM55)\n\n**Try asking me again with your specific origin and destination!**`;
   }
 }
+
+
 
 export default function App() {
   const [lang, setLang] = useState<Language>("en");
