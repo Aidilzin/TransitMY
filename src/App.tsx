@@ -303,6 +303,30 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const routeScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-focus arriving node inside the routes list scroll container
+  useEffect(() => {
+    if (activeTab === "network") {
+      const timer = setTimeout(() => {
+        if (routeScrollContainerRef.current) {
+          const container = routeScrollContainerRef.current;
+          const arrivingElement = container.querySelector("[data-arriving='true']") as HTMLElement;
+          if (arrivingElement) {
+            const containerHeight = container.clientHeight;
+            const elementOffsetTop = arrivingElement.offsetTop;
+            const elementHeight = arrivingElement.clientHeight;
+            const scrollTop = elementOffsetTop - (containerHeight / 2) + (elementHeight / 2);
+            container.scrollTo({
+              top: scrollTop,
+              behavior: "smooth"
+            });
+          }
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedNetworkLine, selectedStationCode, activeTab]);
 
   // Load live timetable & announcements from Express server-side API
   const fetchTimetableData = async () => {
@@ -677,7 +701,7 @@ export default function App() {
               <div
                 className="flex whitespace-nowrap"
                 style={{
-                  animation: "ticker-scroll 60s linear infinite",
+                  animation: "ticker-scroll 30s linear infinite",
                 }}
               >
                 {[...msgs, ...msgs].map((msg, i) => (
@@ -1188,7 +1212,7 @@ export default function App() {
                           <span className="font-bold text-sm text-slate-800 dark:text-white">{lineName}</span>
                           <span className="ml-auto text-[10px] text-slate-400 dark:text-zinc-500 font-mono">{stationList.length} stations · click to set arriving</span>
                         </div>
-                        <div className="overflow-y-auto max-h-[500px]">
+                        <div ref={routeScrollContainerRef} className="overflow-y-auto max-h-[500px]">
                           <div className="relative pl-10 py-3 pr-3 space-y-0">
                             <div className="absolute left-4 top-4 bottom-4 w-1.5 rounded" style={{ backgroundColor: color, opacity: 0.2 }} />
                             {stationList.map((st, idx) => {
@@ -1197,7 +1221,7 @@ export default function App() {
                               return (
                                 <div
                                   key={st.code}
-                                  ref={isArriving ? (el) => { if (el) setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 100); } : undefined}
+                                  data-arriving={isArriving ? "true" : "false"}
                                   className={`relative flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer transition-all border ${
                                     selectedStationCode === st.code
                                       ? "bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
