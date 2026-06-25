@@ -344,8 +344,48 @@ function getSpecificInsights(text: string, lang: "en" | "bm" | "zh" | "ta"): str
   return "";
 }
 
+// Health-check / diagnostics endpoint — visit /api/health in browser to debug
+app.get("/api/health", async (_req, res) => {
+  const keyPresent = !!process.env.GEMINI_API_KEY;
+  const keyPrefix = process.env.GEMINI_API_KEY?.substring(0, 8) ?? "none";
+  let geminiStatus = "not_tested";
+  let geminiError = "";
+  if (keyPresent) {
+    try {
+      const ai = getGoogleGenAI();
+      await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: "ping" }] }],
+      });
+      geminiStatus = "ok_gemini-2.5-flash";
+    } catch (e1: any) {
+      try {
+        const ai = getGoogleGenAI();
+        await ai.models.generateContent({
+          model: "gemini-1.5-flash",
+          contents: [{ role: "user", parts: [{ text: "ping" }] }],
+        });
+        geminiStatus = "ok_gemini-1.5-flash";
+      } catch (e2: any) {
+        geminiStatus = "failed";
+        geminiError = e2?.message ?? String(e2);
+      }
+    }
+  }
+  return res.json({
+    status: "running",
+    gemini_api_key_present: keyPresent,
+    gemini_api_key_prefix: keyPrefix,
+    gemini_api_status: geminiStatus,
+    gemini_api_error: geminiError,
+    node_env: process.env.NODE_ENV ?? "not_set",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // API routes first
 app.post("/api/chat", async (req, res) => {
+
   try {
     const { messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
@@ -383,20 +423,36 @@ app.post("/api/chat", async (req, res) => {
     });
 
     try {
-      // Call Gemini API using 'gemini-2.5-flash' for fast responses
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: contents,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          temperature: 0.7,
-        },
-      });
+      // Try primary model first, fallback to stable model if unavailable
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: contents,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            temperature: 0.7,
+          },
+        });
+      } catch (modelErr: any) {
+        console.warn("gemini-2.5-flash failed, trying gemini-1.5-flash:", modelErr.message);
+        response = await ai.models.generateContent({
+          model: "gemini-1.5-flash",
+          contents: contents,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            temperature: 0.7,
+          },
+        });
+      }
 
       const replyText = response.text || "I am sorry, I could not generate a response.";
       return res.json({ text: replyText });
     } catch (apiError: any) {
-      console.warn("Gemini API call failed, entering TransitMY local fallback mode:", apiError.message);
+      const errMsg = apiError?.message || String(apiError);
+      console.error("[TransitMY] Gemini API call failed — full error:", apiError);
+      console.error("[TransitMY] Error message:", errMsg);
+      console.error("[TransitMY] API key present:", !!process.env.GEMINI_API_KEY, "| Key prefix:", process.env.GEMINI_API_KEY?.substring(0, 8));
       
       const lang = detectLanguage(messages);
       const lastMessageText = messages[messages.length - 1]?.text || "";
